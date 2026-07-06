@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demonstração do Chatbot Widget</title>
+    <style>
+        body {
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f8fafc;
+            color: #0f172a;
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .demo-card {
+            background: #ffffff;
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+            border-radius: 24px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            text-align: center;
+        }
+        h1 {
+            font-size: 28px;
+            margin-bottom: 16px;
+            color: #1e1b4b;
+        }
+        p {
+            font-size: 16px;
+            color: #475569;
+            line-height: 1.6;
+            margin-bottom: 24px;
+        }
+        .code-box {
+            background: #0f172a;
+            color: #f8fafc;
+            padding: 16px 20px;
+            border-radius: 12px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            text-align: left;
+            overflow: hidden;
+            word-break: break-all;
+            white-space: normal;
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+        .btn-copy {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            padding: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 12px;
+            background: #4f46e5;
+            border: 1px solid #4f46e5;
+            color: #ffffff;
+            transition: all 0.2s;
+            box-sizing: border-box;
+            margin-bottom: 24px;
+        }
+        .btn-copy:hover {
+            background: #4338ca;
+            border-color: #4338ca;
+        }
+        .btn-success-feedback {
+            background: rgba(16, 185, 129, 0.12) !important;
+            border-color: rgba(16, 185, 129, 0.3) !important;
+            color: #10b981 !important;
+        }
+        .badge {
+            display: inline-block;
+            background: #e0e7ff;
+            color: #4f46e5;
+            padding: 6px 12px;
+            border-radius: 99px;
+            font-weight: 600;
+            font-size: 13px;
+            margin-bottom: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-card">
+        <span class="badge">Integração do Chatbot</span>
+        <h1>Demonstração de Chatbot como Widget</h1>
+        <p>Você pode configurar este chatbot como um widget flutuante em qualquer página ou site inserindo a seguinte tag HTML antes do fechamento de <code>&lt;/body&gt;</code>:</p>
+        
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+            <div class="code-box">
+                &lt;script src="http://localhost:3000/widget.js"&gt;&lt;/script&gt;
+            </div>
+            <button type="button" id="copyWidgetCodeBtn" class="btn-copy">
+                📋 Copiar Código do Widget
+            </button>
+        </div>
+        
+        <p>Experimente clicar no botão de assistente flutuante no canto inferior direito para interagir com o bot! Ele carrega automaticamente o emoji, cores de tema e dados configurados no painel administrativo.</p>
+    </div>
+
+    <!-- Script de incorporação do widget -->
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        let hash = urlParams.get('hash') || localStorage.getItem('school_hash') || '';
+        
+        const script = document.createElement('script');
+        script.src = 'widget.js' + (hash ? '?hash=' + hash : '');
+        document.body.appendChild(script);
+
+        // Também atualiza o code-box para exibir o código dinâmico correspondente
+        const codeBox = document.querySelector('.code-box');
+        if (codeBox) {
+            const hostUrl = window.location.origin;
+            codeBox.textContent = `<script src="${hostUrl}/widget.js${hash ? '?hash=' + hash : ''}"><\/script>`;
+        }
+
+        // Lógica para copiar o código
+        const copyBtn = document.getElementById('copyWidgetCodeBtn');
+        if (copyBtn && codeBox) {
+            copyBtn.addEventListener('click', () => {
+                navigator.clipboard.writeText(codeBox.textContent.trim()).then(() => {
+                    const originalHtml = copyBtn.innerHTML;
+                    copyBtn.innerHTML = '<span>✅ Copiado!</span>';
+                    copyBtn.classList.add('btn-success-feedback');
+                    setTimeout(() => {
+                        copyBtn.innerHTML = originalHtml;
+                        copyBtn.classList.remove('btn-success-feedback');
+                    }, 2000);
+                }).catch(err => {
+                    console.error('Erro ao copiar código:', err);
+                });
+            });
+        }
+    </script>
+</body>
+</html>

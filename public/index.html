@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assistente Virtual - DKSOFT</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-info">
+                <div class="header-logo">🤖</div>
+                <div class="header-title">
+                    <h1>Assistente DKSOFT</h1>
+                    <p>Online</p>
+                </div>
+            </div>
+        </header>
+
+        <!-- Corpo do Chat -->
+        <main class="chat-log" id="chatLog">
+            <!-- As mensagens serão inseridas dinamicamente aqui -->
+        </main>
+
+        <!-- Barra de Digitação -->
+        <footer class="input-area">
+            <input type="text" id="userInput" class="input-field" placeholder="Digite sua mensagem aqui..." autocomplete="off">
+            <button id="sendBtn" class="send-btn" title="Enviar Mensagem">
+                <svg viewBox="0 0 24 24">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
+                </svg>
+            </button>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
