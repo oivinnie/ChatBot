@@ -1686,9 +1686,10 @@ function initWhatsApp(schoolHash, schoolConfig) {
             clientId: `dk_chatbot_session_${schoolHash}`
         }),
         webVersionCache: {
-            type: 'remote',
-            remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1042751833-alpha.html'
+            type: 'local',
+            path: './.wwebjs_cache/'
         },
+        webVersion: '2.3000.1042751833-alpha',
         deviceName: `Bot ${schoolConfig.nome_fantasia || 'DKSoft'}`,
         puppeteer: {
             headless: true,
