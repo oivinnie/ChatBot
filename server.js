@@ -1692,6 +1692,7 @@ function initWhatsApp(schoolHash, schoolConfig) {
         deviceName: `Bot ${schoolConfig.nome_fantasia || 'DKSoft'}`,
         puppeteer: {
             headless: true,
+            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',

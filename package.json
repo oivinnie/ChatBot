@@ -15,7 +15,8 @@
     "mysql2": "^3.22.5",
     "node-firebird": "^2.3.2",
     "qrcode": "^1.5.4",
-    "whatsapp-web.js": "^1.34.7"
+    "whatsapp-web.js": "^1.34.7",
+	"puppeteer": "^24.12.1"
   },
   "engines": {
     "node": "18.20.2"

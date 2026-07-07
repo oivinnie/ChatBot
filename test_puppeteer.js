@@ -1,3 +1,4 @@
+require('dotenv').config();
 const puppeteer = require('puppeteer');
 
 async function test() {
@@ -6,6 +7,7 @@ async function test() {
         console.log('Tentando lançar o navegador...');
         const browser = await puppeteer.launch({
             headless: 'new', // ou true
+            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
             args: [
                 '--no-sandbox', 
                 '--disable-setuid-sandbox',
