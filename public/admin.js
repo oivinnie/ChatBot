@@ -572,18 +572,30 @@ waDisconnectBtn.addEventListener('click', () => {
     });
 });
 
-// Atualizar status manualmente
+// Atualizar status manualmente com cooldown de 60 segundos
 if (waRefreshBtn) {
     waRefreshBtn.addEventListener('click', async () => {
         const span = waRefreshBtn.querySelector('span') || waRefreshBtn;
         const originalText = span.innerHTML;
-        span.innerHTML = '⏳ Atualizando...';
+        
         waRefreshBtn.disabled = true;
+        span.innerHTML = '⏳ Atualizando...';
+        
         await checkWhatsAppStatus();
-        setTimeout(() => {
-            span.innerHTML = originalText;
-            waRefreshBtn.disabled = false;
-        }, 600);
+        
+        let cooldown = 60;
+        span.innerHTML = `⏳ Aguarde (${cooldown}s)`;
+        
+        const timer = setInterval(() => {
+            cooldown--;
+            if (cooldown <= 0) {
+                clearInterval(timer);
+                span.innerHTML = originalText;
+                waRefreshBtn.disabled = false;
+            } else {
+                span.innerHTML = `⏳ Aguarde (${cooldown}s)`;
+            }
+        }, 1000);
     });
 }
 

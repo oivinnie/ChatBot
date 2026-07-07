@@ -18,6 +18,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const mysql = require('mysql2/promise');
+const { exec } = require('child_process');
 const db = require('./db');
 const ConfigService = require('./ConfigService');
 
@@ -1697,18 +1698,39 @@ const isInitializingWhatsApp = {}; // hash -> boolean
 const lastManualMessageTime = {}; // recipientId -> timestamp
 const sendingAutomatedFor = new Set(); // recipientId
 
+// Helper para matar processos zumbis do Chrome/Chromium de forma automatizada
+function killChromiumProcesses() {
+    return new Promise((resolve) => {
+        if (process.platform !== 'win32') {
+            exec('pkill -f chrome || true; pkill -f chromium || true', (err) => {
+                if (err) console.error('Erro ao limpar processos Chromium:', err.message);
+                else console.log('Processos Chromium zumbis limpos com sucesso.');
+                resolve();
+            });
+        } else {
+            exec('taskkill /f /im chrome.exe /im chromedriver.exe 2>nul || exit 0', () => {
+                resolve();
+            });
+        }
+    });
+}
+
 // Helper para limpar a pasta da sessão e evitar travamento de arquivos
 function cleanSessionFolder(schoolHash) {
     const sessionPath = path.join(__dirname, '.wwebjs_auth', `session-dk_chatbot_session_${schoolHash}`);
-    try {
-        if (fs.existsSync(sessionPath)) {
-            console.log(`Limpando pasta de sessão do WhatsApp para a escola ${schoolHash}...`);
-            fs.rmSync(sessionPath, { recursive: true, force: true });
-            console.log(`Pasta de sessão da escola ${schoolHash} limpa com sucesso!`);
+    
+    // Mata qualquer Chromium rodando antes de tentar remover a pasta (evita travamento de arquivos/lock)
+    killChromiumProcesses().then(() => {
+        try {
+            if (fs.existsSync(sessionPath)) {
+                console.log(`Limpando pasta de sessão do WhatsApp para a escola ${schoolHash}...`);
+                fs.rmSync(sessionPath, { recursive: true, force: true });
+                console.log(`Pasta de sessão da escola ${schoolHash} limpa com sucesso!`);
+            }
+        } catch (err) {
+            console.error(`Erro ao limpar pasta de sessão para a escola ${schoolHash}:`, err.message);
         }
-    } catch (err) {
-        console.error(`Erro ao limpar pasta de sessão para a escola ${schoolHash}:`, err.message);
-    }
+    });
 }
 
 function initWhatsApp(schoolHash, schoolConfig) {
@@ -1841,6 +1863,9 @@ function initWhatsApp(schoolHash, schoolConfig) {
 // Inicializa o WhatsApp para todas as escolas configuradas no startup
 async function startWhatsAppForActiveSchools() {
     try {
+        // Mata processos Chromium travados em segundo plano antes do boot
+        await killChromiumProcesses();
+        
         const activeSchools = await ConfigService.getAllSchools();
         activeSchools.forEach(school => {
             initWhatsApp(school.hash, school);
