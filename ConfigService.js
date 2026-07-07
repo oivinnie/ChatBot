@@ -171,6 +171,21 @@ async function getSchoolConnectionConfig(idOrHash) {
     const idAtendimento = config.id_atendimento;
     const now = Date.now();
 
+    // Se as credenciais já estão gravadas no banco de dados central (escola_configs), usamos elas diretamente sem consultar o dksoft19
+    if (config.host && config.database_path) {
+        const connConfig = {
+            host: config.host,
+            port: config.port,
+            database_path: decrypt(config.database_path),
+            banco_dk_encrypted: config.database_path,
+            user: config.db_user || 'sysdba',
+            senha_dk_encrypted: config.db_password
+        };
+        // Salva no cache local para futuras consultas rápidas
+        connCache.set(String(idAtendimento), { data: connConfig, timestamp: now });
+        return connConfig;
+    }
+
     // Verifica se há credenciais válidas no cache
     const cached = connCache.get(String(idAtendimento));
     if (cached && (now - cached.timestamp < CONN_CACHE_TTL)) {
@@ -263,7 +278,8 @@ async function saveSchoolConfig(configData) {
         portal_aluno_link, cadastro_interessados_link, validador_certificado_link,
         theme, emoji, show_financeiro, show_horarios, show_boletim,
         show_plataforma, show_conteudo, show_validador, show_interessados,
-        atendimento_numero, widget_position, widget_text
+        atendimento_numero, widget_position, widget_text,
+        host, port, database_path, db_user, db_password
     } = configData;
 
     if (!id_atendimento) {
@@ -276,8 +292,8 @@ async function saveSchoolConfig(configData) {
             portal_aluno_link, cadastro_interessados_link, validador_certificado_link,
             theme, emoji, show_financeiro, show_horarios, show_boletim,
             show_plataforma, show_conteudo, show_validador, show_interessados,
-            atendimento_numero, widget_position, widget_text, database_path, db_password
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', '')
+            atendimento_numero, widget_position, widget_text, database_path, db_password, host, port, db_user
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
             portal_aluno_link = VALUES(portal_aluno_link),
             cadastro_interessados_link = VALUES(cadastro_interessados_link),
@@ -293,7 +309,12 @@ async function saveSchoolConfig(configData) {
             show_interessados = VALUES(show_interessados),
             atendimento_numero = VALUES(atendimento_numero),
             widget_position = VALUES(widget_position),
-            widget_text = VALUES(widget_text)
+            widget_text = VALUES(widget_text),
+            database_path = CASE WHEN VALUES(database_path) != '' THEN VALUES(database_path) ELSE database_path END,
+            db_password = CASE WHEN VALUES(db_password) != '' THEN VALUES(db_password) ELSE db_password END,
+            host = CASE WHEN VALUES(host) != '' THEN VALUES(host) ELSE host END,
+            port = CASE WHEN VALUES(port) != 0 THEN VALUES(port) ELSE port END,
+            db_user = CASE WHEN VALUES(db_user) != '' THEN VALUES(db_user) ELSE db_user END
     `;
 
     await pool.execute(insertQuery, [
@@ -312,7 +333,12 @@ async function saveSchoolConfig(configData) {
         show_interessados !== false,
         atendimento_numero || '',
         widget_position || 'right',
-        widget_text || 'Posso ajudar?'
+        widget_text || 'Posso ajudar?',
+        database_path || '',
+        db_password || '',
+        host || '',
+        port || 0,
+        db_user || ''
     ]);
 
     // Limpa o cache

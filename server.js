@@ -242,14 +242,14 @@ async function getAvailableOptions(hash, studentId = null) {
         options.push({ id: 'cadastro', label: 'Ainda não sou aluno', url: config.cadastro_interessados_link || 'https://www.dksoft.com.br' });
     }
 
-    // 8. Falar com atendente (Sempre visível se configurado ou como suporte padrão)
-    options.push({ 
-        id: 'atendente', 
-        label: 'Falar com atendente', 
-        url: config.atendimento_numero 
-            ? `https://wa.me/${config.atendimento_numero.replace(/\D/g, '')}` 
-            : 'https://suportedksoft.com.br' 
-    });
+    // 8. Falar com atendente (Apenas se configurado o número de atendimento)
+    if (config.atendimento_numero && config.atendimento_numero.toString().trim() !== '') {
+        options.push({ 
+            id: 'atendente', 
+            label: 'Falar com atendente', 
+            url: `https://wa.me/${config.atendimento_numero.toString().replace(/\D/g, '')}` 
+        });
+    }
 
     return options;
 }
@@ -1048,26 +1048,23 @@ async function chatHandler(req, res) {
                     });
                 }
             } else if (selectedOption.id === 'validador') {
-                const schoolsConfig = db.readSchools();
-                const config = schoolsConfig[session.hash] || db.readConfig();
+                const config = (await ConfigService.getSchoolConfig(session.hash)) || {};
                 const greeting = await getGreetingMessage(session.hash);
                 return res.json({
-                    response: `Você pode acessar o **Validador de Certificado** aqui: (${config.validador_certificado_link})`,
+                    response: `Você pode acessar o **Validador de Certificado** aqui: (${config.validador_certificado_link || 'https://suportedksoft.com.br/certificado'})`,
                     options: greeting.options,
                     isIdentified: false
                 });
             } else if (selectedOption.id === 'cadastro') {
-                const schoolsConfig = db.readSchools();
-                const config = schoolsConfig[session.hash] || db.readConfig();
+                const config = (await ConfigService.getSchoolConfig(session.hash)) || {};
                 const greeting = await getGreetingMessage(session.hash);
                 return res.json({
-                    response: `Acesse nosso site para conhecer: (${config.cadastro_interessados_link})`,
+                    response: `Acesse nosso site para conhecer: (${config.cadastro_interessados_link || 'https://www.dksoft.com.br'})`,
                     options: greeting.options,
                     isIdentified: false
                 });
             } else if (selectedOption.id === 'atendente') {
-                const schoolsConfig = db.readSchools();
-                const config = schoolsConfig[session.hash] || db.readConfig();
+                const config = (await ConfigService.getSchoolConfig(session.hash)) || {};
                 const number = config.atendimento_numero ? config.atendimento_numero.replace(/\D/g, '') : '';
                 const responseText = number 
                     ? `Para falar com um atendente, clique no link a seguir: https://wa.me/${number}` 
@@ -1596,13 +1593,39 @@ app.post('/api/escola/validar', async (req, res) => {
         // Verifica se a escola já tem configuração salva
         const existingConfig = await ConfigService.getSchoolConfig(hash);
 
+        // Parse do host, port e database a partir do banco_dk do dksoft19
+        let host = '127.0.0.1';
+        let port = 3050;
+        let database = schoolDetails.banco_dk;
+
+        const matchSlashPortColon = schoolDetails.banco_dk.match(/^([^/]+)\/(\d+):(.+)$/);
+        if (matchSlashPortColon) {
+            host = matchSlashPortColon[1];
+            port = parseInt(matchSlashPortColon[2]);
+            database = matchSlashPortColon[3];
+        } else {
+            const matchHostColon = schoolDetails.banco_dk.match(/^([^:]{2,}):(.+)$/);
+            if (matchHostColon) {
+                host = matchHostColon[1];
+                database = matchHostColon[2];
+            }
+        }
+
+        const database_path = ConfigService.encrypt(database);
+        const db_password = ConfigService.encrypt(schoolDetails.senha_dk);
+
         // Salva ou atualiza a escola no banco central (preserva configurações anteriores se existirem)
         const configData = existingConfig ? {
             ...existingConfig,
             id_atendimento: schoolDetails.id_cliente,
             hash: hash,
             cnpj: cnpj.trim(),
-            nome_fantasia: schoolDetails.nome_fantasia
+            nome_fantasia: schoolDetails.nome_fantasia,
+            host,
+            port,
+            database_path,
+            db_user: schoolDetails.usuario_dk,
+            db_password
         } : {
             id_atendimento: schoolDetails.id_cliente,
             hash: hash,
@@ -1610,7 +1633,12 @@ app.post('/api/escola/validar', async (req, res) => {
             nome_fantasia: schoolDetails.nome_fantasia,
             portal_aluno_link: 'https://portal.dksoft.com.br/',
             theme: 'indigo',
-            emoji: '🤖'
+            emoji: '🤖',
+            host,
+            port,
+            database_path,
+            db_user: schoolDetails.usuario_dk,
+            db_password
         };
 
         await ConfigService.saveSchoolConfig(configData);
