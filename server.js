@@ -1109,10 +1109,14 @@ async function chatHandler(req, res) {
 
         if (lower.includes('@')) {
             query = `
-                SELECT ID_ALUNO, NOME, CPF, EMAIL, RESPONSAVEL_CPF, RESP_EMAIL, DATA_NASCIMENTO, OM_EAD_ID, MATRICULA, SITUACAO
-                FROM ALUNOS
-                WHERE EMAIL = ? OR RESP_EMAIL = ?
-            `;
+					SELECT ID_ALUNO, NOME, CPF, EMAIL, RESPONSAVEL_CPF, RESP_EMAIL, DATA_NASCIMENTO, OM_EAD_ID, MATRICULA, SITUACAO
+					FROM ALUNOS
+					WHERE (
+						EMAIL = ? OR RESP_EMAIL = ?
+					)
+					AND TIPO = 'AL'
+					AND SITUACAO NOT IN ('Inativo', 'Bloqueado')
+				`;
             params = [lower, lower];
         } else {
             const pRaw = rawInput.slice(0, 18);
@@ -1121,12 +1125,15 @@ async function chatHandler(req, res) {
             const pCnpj = formattedCnpj.slice(0, 18);
 
             query = `
-                SELECT ID_ALUNO, NOME, CPF, EMAIL, RESPONSAVEL_CPF, RESP_EMAIL, DATA_NASCIMENTO, OM_EAD_ID, MATRICULA, SITUACAO
-                FROM ALUNOS
-                WHERE 
-                  CPF = ? OR CPF = ? OR CPF = ? OR CPF = ?
-                  OR RESPONSAVEL_CPF = ? OR RESPONSAVEL_CPF = ? OR RESPONSAVEL_CPF = ? OR RESPONSAVEL_CPF = ?
-            `;
+				SELECT ID_ALUNO, NOME, CPF, EMAIL, RESPONSAVEL_CPF, RESP_EMAIL, DATA_NASCIMENTO, OM_EAD_ID, MATRICULA, SITUACAO
+				FROM ALUNOS
+				WHERE (
+					CPF = ? OR CPF = ? OR CPF = ? OR CPF = ?
+					OR RESPONSAVEL_CPF = ? OR RESPONSAVEL_CPF = ? OR RESPONSAVEL_CPF = ? OR RESPONSAVEL_CPF = ?
+				)
+				AND TIPO = 'AL'
+				AND SITUACAO NOT IN ('Inativo', 'Bloqueado')
+			`;
             params = [
                 pRaw, pDigits, pCpf, pCnpj,
                 pRaw, pDigits, pCpf, pCnpj
