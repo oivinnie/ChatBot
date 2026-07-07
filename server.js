@@ -1691,6 +1691,7 @@ function initWhatsApp(schoolHash, schoolConfig) {
         },
         webVersion: '2.3000.1042751833-alpha',
         deviceName: `Bot ${schoolConfig.nome_fantasia || 'DKSoft'}`,
+        authTimeoutMs: 0,
         puppeteer: {
             headless: true,
             executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
