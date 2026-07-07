@@ -506,7 +506,7 @@ async function checkWhatsAppStatus() {
             waIconContainer.textContent = '⏳';
             waDisconnectBtn.style.display = 'none';
         } else if (data.status === 'QR_READY') {
-            waStatusText.textContent = 'Aguardando leitura do QR Code...';
+            waStatusText.textContent = 'Aguardando leitura do QR Code... Se já conectou no celular, aguarde.';
             waStatusText.style.color = '#d97706'; // amber
             
             if (data.qr) {

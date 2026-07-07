@@ -1742,8 +1742,6 @@ function initWhatsApp(schoolHash, schoolConfig) {
                 '--disable-dev-shm-usage',
                 '--disable-gpu',
                 '--no-first-run',
-                '--no-zygote',
-                '--single-process',
                 '--disable-extensions',
                 '--disable-default-apps',
                 '--mute-audio',
