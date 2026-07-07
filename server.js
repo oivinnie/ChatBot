@@ -150,8 +150,18 @@ async function getGlobalOptions() {
     return { hasOnlineContent, hasActiveIntegration };
 }
 
+const globalOptionsCache = {}; // schoolHash -> { data: options, timestamp: number }
+const OPTIONS_CACHE_TTL = 10 * 60 * 1000; // 10 minutos
+
 // Retorna a lista de opções de menu disponíveis com base na configuração e dados do estudante
 async function getAvailableOptions(hash, studentId = null) {
+    if (!studentId) {
+        const now = Date.now();
+        const cached = globalOptionsCache[hash];
+        if (cached && (now - cached.timestamp < OPTIONS_CACHE_TTL)) {
+            return cached.data;
+        }
+    }
     const config = (await ConfigService.getSchoolConfig(hash)) || {};
     const showFinanceiro = config.show_financeiro !== false;
     const showHorarios = config.show_horarios !== false;
@@ -251,6 +261,9 @@ async function getAvailableOptions(hash, studentId = null) {
         });
     }
 
+    if (!studentId) {
+        globalOptionsCache[hash] = { data: options, timestamp: Date.now() };
+    }
     return options;
 }
 
@@ -1727,7 +1740,15 @@ function initWhatsApp(schoolHash, schoolConfig) {
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
-                '--disable-gpu'
+                '--disable-gpu',
+                '--no-first-run',
+                '--no-zygote',
+                '--single-process',
+                '--disable-extensions',
+                '--disable-default-apps',
+                '--mute-audio',
+                '--no-default-browser-check',
+                '--disable-web-security'
             ]
         }
     });
@@ -1833,16 +1854,32 @@ async function startWhatsAppForActiveSchools() {
 startWhatsAppForActiveSchools();
 
 // API Endpoints para obter status do WhatsApp e QR Code
-app.get('/api/whatsapp/status', (req, res) => {
+app.get('/api/whatsapp/status', async (req, res) => {
     const { hash } = req.query;
     if (!hash) {
         return res.status(400).json({ error: 'O hash da escola é obrigatório.' });
     }
 
-    const status = whatsappStatuses[hash] || 'DISCONNECTED';
+    let status = whatsappStatuses[hash] || 'DISCONNECTED';
     const qr = whatsappQrData[hash] || null;
     const client = whatsappClients[hash];
     let connectionInfo = null;
+
+    // Se o status for DISCONNECTED e não estiver inicializando, tenta iniciar automaticamente o cliente (útil para cliques em 'Atualizar')
+    if (status === 'DISCONNECTED' && !isInitializingWhatsApp[hash]) {
+        try {
+            const schoolConfig = await ConfigService.getSchoolConfig(hash);
+            if (schoolConfig) {
+                console.log(`[${schoolConfig.nome_fantasia || hash}] Tentando inicializar o WhatsApp via chamada de status...`);
+                // Chama a inicialização de forma assíncrona
+                initWhatsApp(hash, schoolConfig);
+                status = 'INITIALIZING';
+                whatsappStatuses[hash] = 'INITIALIZING';
+            }
+        } catch (err) {
+            console.error('Erro ao reinicializar WhatsApp via rota de status:', err);
+        }
+    }
 
     if (status === 'CONNECTED' && client && client.info) {
         connectionInfo = {
