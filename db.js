@@ -17,7 +17,7 @@ const fallbackConfig = {
 };
 
 // Analisa a string de conexão do banco de dados (ex: host/port:caminho ou host:caminho)
-function parseDatabasePath(dbPath, defaultHost = '127.0.0.1', defaultPort = 3050) {
+function parseDatabasePath(dbPath, defaultHost = 'node270594-chatbot.sp1.br.saveincloud.net.br', defaultPort = 3050) {
     let host = defaultHost;
     let port = defaultPort;
     let database = dbPath;
