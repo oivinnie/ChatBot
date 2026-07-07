@@ -746,7 +746,7 @@ async function processPlataforma(hash, session, studentId, studentName) {
         return response;
     } catch (err) {
         console.error('Erro ao processar integrações de plataforma:', err);
-        return `Ocorreu um erro ao consultar as integrações de plataforma no banco de dados. Por favor, tente novamente mais tarde.`;
+        return `Ocorreu um erro ao consultar a integração. Por favor, tente novamente mais tarde.`;
     }
 }
 // Preenche as informações extras de conteúdo online e integrações do aluno na sessão
@@ -1240,7 +1240,7 @@ async function chatHandler(req, res) {
         } catch (err) {
             console.error('Erro ao consultar banco:', err);
             return res.json({ 
-                response: 'Ocorreu um erro ao acessar o banco de dados. Certifique-se de que a conexão está configurada corretamente no painel administrativo.',
+                response: 'Ops, estou com dificuldade para me conectar 😕.',
                 options: [],
                 isIdentified: false
             });
@@ -1782,8 +1782,9 @@ function initWhatsApp(schoolHash, schoolConfig) {
         }, 1500);
     });
 
-    client.on('message', async (msg) => {
+    client.on('message_create', async (msg) => {
         try {
+            if (msg.fromMe) return; // Ignora mensagens enviadas pelo próprio bot/operador
             if (msg.from.endsWith('@g.us') || msg.isStatus) return;
 
             const text = msg.body ? msg.body.trim() : '';
