@@ -146,7 +146,7 @@
             @media (max-width: 480px) {
                 .dk-chat-widget-container {
                     width: calc(100% - 40px);
-                    height: calc(100% - 120px);
+                    height: calc(100% - 60px);
                     bottom: 95px;
                     ${position}: 20px;
                     border-radius: 16px;

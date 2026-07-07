@@ -1776,8 +1776,13 @@ function initWhatsApp(schoolHash, schoolConfig) {
             const result = await processChatMessage(msg.from, messageToSend, schoolHash);
             
             sendingAutomatedFor.add(msg.from);
-            await msg.reply(result.response);
-            sendingAutomatedFor.delete(msg.from);
+            try {
+                await msg.reply(result.response);
+            } finally {
+                setTimeout(() => {
+                    sendingAutomatedFor.delete(msg.from);
+                }, 2000);
+            }
         } catch (err) {
             console.error(`[${schoolConfig.nome_fantasia || schoolHash}] Erro ao processar mensagem do WhatsApp:`, err);
         }
