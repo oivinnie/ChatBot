@@ -1763,13 +1763,6 @@ function initWhatsApp(schoolHash, schoolConfig) {
 
             console.log(`[${schoolConfig.nome_fantasia || schoolHash}] Mensagem de WhatsApp de ${msg.from}: "${text}"`);
 
-            // Se o operador enviou mensagem manual para este contato nos últimos 60 segundos, pausamos o bot
-            const lastManual = lastManualMessageTime[msg.from] || 0;
-            if (Date.now() - lastManual < 60000) {
-                console.log(`[${schoolConfig.nome_fantasia || schoolHash}] Bot pausado para ${msg.from} devido a mensagem manual recente.`);
-                return;
-            }
-
             const isFirstMessage = !sessions[msg.from];
             const messageToSend = isFirstMessage ? 'menu' : text;
             
@@ -1785,16 +1778,6 @@ function initWhatsApp(schoolHash, schoolConfig) {
             }
         } catch (err) {
             console.error(`[${schoolConfig.nome_fantasia || schoolHash}] Erro ao processar mensagem do WhatsApp:`, err);
-        }
-    });
-
-    client.on('message_create', (msg) => {
-        if (msg.fromMe) {
-            const recipient = msg.to;
-            if (!sendingAutomatedFor.has(recipient)) {
-                console.log(`[${schoolConfig.nome_fantasia || schoolHash}] Mensagem manual detectada para ${recipient}. Pausando respostas do bot.`);
-                lastManualMessageTime[recipient] = Date.now();
-            }
         }
     });
 
