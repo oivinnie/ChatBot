@@ -300,7 +300,7 @@ async function saveSchoolConfig(configData) {
         id_atendimento, hash, cnpj, nome_fantasia,
         portal_aluno_link || 'https://portal.dksoft.com.br/',
         cadastro_interessados_link || '',
-        validador_certificado_link || '',
+        validador_certificado_link || 'https://suportedksoft.com.br/certificado/',
         theme || 'indigo',
         emoji || '🤖',
         show_financeiro !== false,
@@ -319,10 +319,10 @@ async function saveSchoolConfig(configData) {
     invalidateCache(id_atendimento);
 }
 
-// Busca todas as escolas ativas para inicialização do WhatsApp
+// Busca todas as escolas configuradas para inicialização do WhatsApp
 async function getAllSchools() {
     const pool = getCentralPool();
-    const [rows] = await pool.execute("SELECT * FROM escola_configs WHERE status = 'ativo'");
+    const [rows] = await pool.execute("SELECT * FROM escola_configs");
     return rows;
 }
 

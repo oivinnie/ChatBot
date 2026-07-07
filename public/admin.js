@@ -158,7 +158,7 @@ async function loadConfig() {
         if (portalAlunoLink) portalAlunoLink.value = config.portal_aluno_link || 'https://portal.dksoft.com.br/';
         if (atendimentoNumero) atendimentoNumero.value = formatPhone(config.atendimento_numero || '');
         if (cadastroInteressadosLink) cadastroInteressadosLink.value = config.cadastro_interessados_link || '';
-        if (validadorCertificadoLink) validadorCertificadoLink.value = config.validador_certificado_link || '';
+        if (validadorCertificadoLink) validadorCertificadoLink.value = config.validador_certificado_link || 'https://suportedksoft.com.br/certificado/';
         if (themeSelect) themeSelect.value = config.theme || 'indigo';
         if (botEmoji) botEmoji.value = config.emoji || '🤖';
         

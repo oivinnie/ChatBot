@@ -92,7 +92,8 @@ function execute(hashOrQuery, queryOrParams, params = []) {
                 user: config.user || 'sysdba',
                 password: config.password || 'masterkey',
                 lowercase_keys: false,
-                pageSize: 4096
+                pageSize: 4096,
+                charset: 'UTF8'
             };
 
             Firebird.attach(options, function(err, db) {

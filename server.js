@@ -65,7 +65,7 @@ async function validateSchoolCentral(id_atendimento, cnpj) {
         });
 
         if (!matchedClient) {
-            throw new Error('CNPJ incorreto. Se tiver dúvidas, entre em contato com o suporte.');
+            throw new Error('CNPJ incorreto. Preencha como está no menu "Configurações -> Dados da Empresa" do DKSoft. \n\nSe tiver dúvidas, entre em contato com o suporte.');
         }
 
         // Verifica se dkapp está ativo (espera-se 'S' ou 's')
@@ -80,7 +80,7 @@ async function validateSchoolCentral(id_atendimento, cnpj) {
         );
 
         if (onlineRows.length === 0) {
-            throw new Error('Necessário migrar para a versão online para utilizar o chatbot.');
+            throw new Error('Necessário migrar para a versão online para utilizar o ChatBot.');
         }
 
         return {
@@ -1425,7 +1425,7 @@ app.get('/api/config', async (req, res) => {
         res.json({
             portal_aluno_link: 'https://portal.dksoft.com.br/',
             cadastro_interessados_link: '',
-            validador_certificado_link: '',
+            validador_certificado_link: 'https://suportedksoft.com.br/certificado/',
             theme: 'indigo',
             emoji: '🤖',
             show_financeiro: true,
@@ -1464,7 +1464,7 @@ app.post('/api/config', async (req, res) => {
             nome_fantasia: config.nome_fantasia,
             portal_aluno_link: portal_aluno_link || 'https://portal.dksoft.com.br/',
             cadastro_interessados_link: cadastro_interessados_link || '',
-            validador_certificado_link: validador_certificado_link || '',
+            validador_certificado_link: validador_certificado_link || 'https://suportedksoft.com.br/certificado/',
             theme: theme || 'indigo',
             emoji: emoji || '🤖',
             show_financeiro: show_financeiro !== false,
