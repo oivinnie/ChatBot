@@ -1722,9 +1722,6 @@ function killChromiumProcesses() {
 // Helper para limpar a pasta da sessão e evitar travamento de arquivos
 async function cleanSessionFolder(schoolHash) {
     const sessionPath = path.join(__dirname, '.wwebjs_auth', `session-dk_chatbot_session_${schoolHash}`);
-    
-    // Mata qualquer Chromium rodando antes de tentar remover a pasta (evita travamento de arquivos/lock)
-    await killChromiumProcesses();
     try {
         if (fs.existsSync(sessionPath)) {
             console.log(`Limpando pasta de sessão do WhatsApp para a escola ${schoolHash}...`);
@@ -1743,7 +1740,25 @@ async function destroyWhatsAppClient(schoolHash) {
         console.log(`[${schoolHash}] Destruindo cliente WhatsApp existente e removendo ouvintes...`);
         try {
             client.removeAllListeners();
+            
+            // Tenta obter o PID do browser do Puppeteer para garantir a finalização se necessário
+            let pid = null;
+            if (client.pupBrowser && client.pupBrowser.process()) {
+                pid = client.pupBrowser.process().pid;
+            }
+
+            // Tenta encerrar graciosamente
             await client.destroy();
+
+            // Se o processo ainda existir em segundo plano, encerra com SIGKILL
+            if (pid) {
+                try {
+                    process.kill(pid, 'SIGKILL');
+                    console.log(`[${schoolHash}] Processo Chromium zumbi (PID ${pid}) finalizado.`);
+                } catch (killErr) {
+                    // Ignora se o processo já tiver sido encerrado
+                }
+            }
         } catch (err) {
             console.error(`[${schoolHash}] Erro ao destruir cliente:`, err);
         }
@@ -1822,10 +1837,7 @@ async function initWhatsApp(schoolHash, schoolConfig) {
         whatsappStatuses[schoolHash] = 'DISCONNECTED';
         whatsappQrData[schoolHash] = null;
         isInitializingWhatsApp[schoolHash] = true;
-        try {
-            client.removeAllListeners();
-            await client.destroy();
-        } catch (e) {}
+        await destroyWhatsAppClient(schoolHash);
         setTimeout(async () => {
             await cleanSessionFolder(schoolHash);
             isInitializingWhatsApp[schoolHash] = false;
@@ -1837,10 +1849,7 @@ async function initWhatsApp(schoolHash, schoolConfig) {
         whatsappStatuses[schoolHash] = 'DISCONNECTED';
         whatsappQrData[schoolHash] = null;
         isInitializingWhatsApp[schoolHash] = true;
-        try {
-            client.removeAllListeners();
-            await client.destroy();
-        } catch (e) {}
+        await destroyWhatsAppClient(schoolHash);
         setTimeout(async () => {
             await cleanSessionFolder(schoolHash);
             isInitializingWhatsApp[schoolHash] = false;
@@ -1964,12 +1973,11 @@ app.post('/api/whatsapp/disconnect', async (req, res) => {
         if (client) {
             client.removeAllListeners();
             await client.logout();
-            await client.destroy();
         }
     } catch (err) {
         console.error(`Erro ao desconectar WhatsApp da escola ${hash}:`, err);
     }
-    delete whatsappClients[hash];
+    await destroyWhatsAppClient(hash);
 
     setTimeout(async () => {
         await cleanSessionFolder(hash);
