@@ -1736,12 +1736,30 @@ async function cleanSessionFolder(schoolHash) {
     }
 }
 
-function initWhatsApp(schoolHash, schoolConfig) {
+// Helper para remover ouvintes e destruir de forma limpa um cliente do WhatsApp
+async function destroyWhatsAppClient(schoolHash) {
+    const client = whatsappClients[schoolHash];
+    if (client) {
+        console.log(`[${schoolHash}] Destruindo cliente WhatsApp existente e removendo ouvintes...`);
+        try {
+            client.removeAllListeners();
+            await client.destroy();
+        } catch (err) {
+            console.error(`[${schoolHash}] Erro ao destruir cliente:`, err);
+        }
+        delete whatsappClients[schoolHash];
+    }
+}
+
+async function initWhatsApp(schoolHash, schoolConfig) {
     if (isInitializingWhatsApp[schoolHash]) {
         console.log(`[${schoolConfig.nome_fantasia || schoolHash}] WhatsApp Client já está inicializando, ignorando.`);
         return;
     }
     isInitializingWhatsApp[schoolHash] = true;
+
+    // Garante a destruição de qualquer cliente anterior da mesma escola
+    await destroyWhatsAppClient(schoolHash);
 
     console.log(`[${schoolConfig.nome_fantasia || schoolHash}] Inicializando WhatsApp Client...`);
     whatsappStatuses[schoolHash] = 'INITIALIZING';
@@ -1799,13 +1817,14 @@ function initWhatsApp(schoolHash, schoolConfig) {
         whatsappQrData[schoolHash] = null;
     });
 
-    client.on('auth_failure', (msg) => {
+    client.on('auth_failure', async (msg) => {
         console.error(`[${schoolConfig.nome_fantasia || schoolHash}] Falha na autenticação:`, msg);
         whatsappStatuses[schoolHash] = 'DISCONNECTED';
         whatsappQrData[schoolHash] = null;
         isInitializingWhatsApp[schoolHash] = true;
         try {
-            client.destroy();
+            client.removeAllListeners();
+            await client.destroy();
         } catch (e) {}
         setTimeout(async () => {
             await cleanSessionFolder(schoolHash);
@@ -1819,6 +1838,7 @@ function initWhatsApp(schoolHash, schoolConfig) {
         whatsappQrData[schoolHash] = null;
         isInitializingWhatsApp[schoolHash] = true;
         try {
+            client.removeAllListeners();
             await client.destroy();
         } catch (e) {}
         setTimeout(async () => {
@@ -1942,12 +1962,14 @@ app.post('/api/whatsapp/disconnect', async (req, res) => {
 
     try {
         if (client) {
+            client.removeAllListeners();
             await client.logout();
             await client.destroy();
         }
     } catch (err) {
         console.error(`Erro ao desconectar WhatsApp da escola ${hash}:`, err);
     }
+    delete whatsappClients[hash];
 
     setTimeout(async () => {
         await cleanSessionFolder(hash);
