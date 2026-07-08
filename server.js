@@ -1792,11 +1792,6 @@ async function initWhatsApp(schoolHash, schoolConfig) {
             clientId: `dk_chatbot_session_${schoolHash}`,
             dataPath: path.join(__dirname, '.wwebjs_auth')
         }),
-        webVersionCache: {
-            type: 'local',
-            path: path.join(__dirname, '.wwebjs_cache')
-        },
-        webVersion: '2.3000.1042751833-alpha',
         deviceName: 'chatbot',
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
         authTimeoutMs: 300000,
