@@ -305,7 +305,7 @@ async function validateSchool() {
         const data = await response.json();
         
         loginValidateBtn.disabled = false;
-        loginValidateBtn.querySelector('span').textContent = 'Validar & Entrar';
+        loginValidateBtn.querySelector('span').textContent = '🚪 Acessar';
         
         if (data.success) {
             localStorage.setItem('school_hash', data.hash);
@@ -325,7 +325,7 @@ async function validateSchool() {
         }
     } catch (err) {
         loginValidateBtn.disabled = false;
-        loginValidateBtn.querySelector('span').textContent = 'Validar & Entrar';
+        loginValidateBtn.querySelector('span').textContent = '🚪 Acessar';
         console.error('Erro ao validar escola:', err);
         showAlert('error', 'Erro de comunicação ao validar a escola no servidor.');
     }

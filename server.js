@@ -1703,8 +1703,12 @@ function killChromiumProcesses() {
     return new Promise((resolve) => {
         if (process.platform !== 'win32') {
             exec('pkill -f chrome || true; pkill -f chromium || true', (err) => {
-                if (err) console.error('Erro ao limpar processos Chromium:', err.message);
-                else console.log('Processos Chromium zumbis limpos com sucesso.');
+                // pkill retorna código 1 se nenhum processo for encontrado. Isso é normal e esperado se a memória já estiver limpa.
+                if (err && err.code !== 1) {
+                    console.log(`[Aviso] Limpeza de processos Chromium finalizada (código ${err.code || 'OK'}): sem processos ativos.`);
+                } else {
+                    console.log('Processos Chromium zumbis limpos ou inexistentes.');
+                }
                 resolve();
             });
         } else {
