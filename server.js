@@ -1747,8 +1747,15 @@ async function destroyWhatsAppClient(schoolHash) {
                 pid = client.pupBrowser.process().pid;
             }
 
-            // Tenta encerrar graciosamente
-            await client.destroy();
+            // Tenta encerrar graciosamente com timeout de 5 segundos
+            try {
+                await Promise.race([
+                    client.destroy(),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout no destroy')), 5000))
+                ]);
+            } catch (destroyErr) {
+                console.warn(`[${schoolHash}] Falha ou timeout ao destruir cliente (prosseguindo para PID-kill):`, destroyErr.message);
+            }
 
             // Se o processo ainda existir em segundo plano, encerra com SIGKILL
             if (pid) {
@@ -1972,7 +1979,15 @@ app.post('/api/whatsapp/disconnect', async (req, res) => {
     try {
         if (client) {
             client.removeAllListeners();
-            await client.logout();
+            // Tenta efetuar o logout na página com timeout de 5 segundos para evitar travamentos
+            try {
+                await Promise.race([
+                    client.logout(),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout no logout')), 5000))
+                ]);
+            } catch (logoutErr) {
+                console.warn(`[${hash}] Falha ou timeout no logout do WhatsApp:`, logoutErr.message);
+            }
         }
     } catch (err) {
         console.error(`Erro ao desconectar WhatsApp da escola ${hash}:`, err);
