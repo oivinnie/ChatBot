@@ -106,7 +106,7 @@ function logoutSchool() {
 function disableConfigFields(disabled) {
     const fields = [
         portalAlunoLink, atendimentoNumero, cadastroInteressadosLink,
-        validadorCertificadoLink, themeSelect, botEmoji, showFinanceiro,
+        themeSelect, botEmoji, showFinanceiro,
         showHorarios, showBoletim, showPlataforma, showConteudo,
         showValidador, showInteressados, widgetPosition, widgetText, testBtn, saveBtn,
         document.getElementById('waRefreshBtn'), document.getElementById('waDisconnectBtn')
@@ -377,7 +377,7 @@ async function saveConfig() {
         portal_aluno_link: portalAlunoLink ? portalAlunoLink.value : '',
         atendimento_numero: atendimentoNumero ? atendimentoNumero.value.replace(/\D/g, '') : '',
         cadastro_interessados_link: cadastroInteressadosLink ? cadastroInteressadosLink.value : '',
-        validador_certificado_link: validadorCertificadoLink ? validadorCertificadoLink.value : '',
+        validador_certificado_link: 'https://suportedksoft.com.br/certificado/',
         theme: themeSelect ? themeSelect.value : 'indigo',
         emoji: botEmoji ? botEmoji.value : '🤖',
         show_financeiro: showFinanceiro ? showFinanceiro.checked : true,

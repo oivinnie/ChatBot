@@ -200,6 +200,10 @@ async function sendMessage(textToSend = null) {
         } else {
             appendMessage('bot', 'Desculpe, recebi uma resposta vazia do servidor.');
         }
+
+        if (data.redirectUrl) {
+            window.open(data.redirectUrl, '_blank');
+        }
     } catch (err) {
         removeTypingIndicator();
         console.error('Erro ao enviar mensagem:', err);

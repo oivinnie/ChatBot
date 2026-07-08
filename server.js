@@ -50,9 +50,9 @@ async function validateSchoolCentral(id_atendimento, cnpj) {
 
     try {
         const cleanCnpj = cnpj.replace(/\D/g, '');
-        // Busca na tabela tclientes com a coluna dkapp
+        // Busca na tabela tclientes com a coluna dkapp e situacao
         const [rows] = await dkPool.execute(
-            'SELECT id_cliente, nome, cnpj, dkapp FROM TCLIENTES WHERE id_cliente = ?',
+            'SELECT id_cliente, nome, cnpj, dkapp, situacao FROM TCLIENTES WHERE id_cliente = ?',
             [id_atendimento]
         );
 
@@ -71,6 +71,11 @@ async function validateSchoolCentral(id_atendimento, cnpj) {
 
         // Verifica se dkapp está ativo (espera-se 'S' ou 's')
         if (!matchedClient.dkapp || matchedClient.dkapp.trim().toUpperCase() !== 'S') {
+            throw new Error('DKAPP_INACTIVE');
+        }
+
+        // Verifica se a situação está ativa (espera-se 'A')
+        if (!matchedClient.situacao || matchedClient.situacao.trim().toUpperCase() !== 'A') {
             throw new Error('DKAPP_INACTIVE');
         }
 
@@ -98,6 +103,15 @@ async function validateSchoolCentral(id_atendimento, cnpj) {
 }
 
 // Helpers de formatação
+function formatUrl(url) {
+    if (!url) return '';
+    const trimmed = url.trim();
+    if (/^https?:\/\//i.test(trimmed)) {
+        return trimmed;
+    }
+    return `https://${trimmed}`;
+}
+
 function formatDate(dateStr) {
     if (!dateStr) return '';
     const date = new Date(dateStr);
@@ -245,12 +259,21 @@ async function getAvailableOptions(hash, studentId = null) {
 
     // 6. Validador de Certificado (Sempre visível se showValidador estiver ativo)
     if (showValidador) {
-        options.push({ id: 'validador', label: 'Validador de Certificado', url: config.validador_certificado_link || 'https://appdksoft.com.br/certificado' });
+        options.push({ 
+            id: 'validador', 
+            label: 'Validador de Certificado', 
+            url: 'https://suportedksoft.com.br/certificado/' 
+        });
     }
 
     // 7. Cadastro de Interessados (Apenas se não identificado e showInteressados ativo)
     if (!studentId && showInteressados) {
-        options.push({ id: 'cadastro', label: 'Ainda não sou aluno', url: config.cadastro_interessados_link || 'https://www.dksoft.com.br' });
+        const hasLink = config.cadastro_interessados_link && config.cadastro_interessados_link.toString().trim() !== '';
+        options.push({ 
+            id: 'cadastro', 
+            label: 'Ainda não sou aluno', 
+            url: hasLink ? formatUrl(config.cadastro_interessados_link.toString()) : null 
+        });
     }
 
     // 8. Falar com atendente (Apenas se configurado o número de atendimento)
@@ -1062,20 +1085,26 @@ async function chatHandler(req, res) {
                     });
                 }
             } else if (selectedOption.id === 'validador') {
-                const config = (await ConfigService.getSchoolConfig(session.hash)) || {};
                 const greeting = await getGreetingMessage(session.hash);
                 return res.json({
-                    response: `Você pode acessar o **Validador de Certificado** aqui: (${config.validador_certificado_link || 'https://suportedksoft.com.br/certificado'})`,
+                    response: `Acessando o validador de certificado...`,
                     options: greeting.options,
-                    isIdentified: false
+                    isIdentified: false,
+                    redirectUrl: 'https://suportedksoft.com.br/certificado/'
                 });
             } else if (selectedOption.id === 'cadastro') {
                 const config = (await ConfigService.getSchoolConfig(session.hash)) || {};
                 const greeting = await getGreetingMessage(session.hash);
+                const redirectUrl = config.cadastro_interessados_link && config.cadastro_interessados_link.toString().trim() !== ''
+                    ? formatUrl(config.cadastro_interessados_link.toString())
+                    : null;
                 return res.json({
-                    response: `Acesse nosso site para conhecer: (${config.cadastro_interessados_link || 'https://www.dksoft.com.br'})`,
+                    response: redirectUrl 
+                        ? `Acessando o cadastro de interessados...` 
+                        : `Fale com um atendente da escola para realizar seu cadastro.`,
                     options: greeting.options,
-                    isIdentified: false
+                    isIdentified: false,
+                    redirectUrl: redirectUrl
                 });
             } else if (selectedOption.id === 'atendente') {
                 const config = (await ConfigService.getSchoolConfig(session.hash)) || {};
