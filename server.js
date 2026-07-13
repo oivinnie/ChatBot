@@ -1724,6 +1724,7 @@ const whatsappClients = {};
 const whatsappStatuses = {}; // hash -> status
 const whatsappQrData = {}; // hash -> qrData
 const isInitializingWhatsApp = {}; // hash -> boolean
+const whatsappManualInitRequested = {}; // hash -> boolean
 const lastManualMessageTime = {}; // recipientId -> timestamp
 const sendingAutomatedFor = new Set(); // recipientId
 
@@ -1844,6 +1845,22 @@ async function initWhatsApp(schoolHash, schoolConfig) {
 
     client.on('qr', async (qr) => {
         console.log(`[${schoolConfig.nome_fantasia || schoolHash}] QR Code recebido para WhatsApp.`);
+        
+        // Se a inicialização NÃO foi manual (foi automática no startup),
+        // significa que a sessão salva no disco expirou ou é inválida.
+        // Devemos limpar a sessão e colocar como DESCONECTADO para liberar recursos e mostrar o botão de Ativar.
+        const isManual = whatsappManualInitRequested[schoolHash] === true;
+        if (!isManual) {
+            console.log(`[${schoolConfig.nome_fantasia || schoolHash}] Sessão expirada/inválida detectada no startup. Destruindo cliente para poupar recursos...`);
+            whatsappStatuses[schoolHash] = 'DISCONNECTED';
+            whatsappQrData[schoolHash] = null;
+            isInitializingWhatsApp[schoolHash] = false;
+            destroyWhatsAppClient(schoolHash).then(() => {
+                cleanSessionFolder(schoolHash);
+            });
+            return;
+        }
+
         try {
             whatsappQrData[schoolHash] = await qrcode.toDataURL(qr);
             whatsappStatuses[schoolHash] = 'QR_READY';
@@ -1857,6 +1874,7 @@ async function initWhatsApp(schoolHash, schoolConfig) {
         whatsappStatuses[schoolHash] = 'CONNECTED';
         whatsappQrData[schoolHash] = null;
         isInitializingWhatsApp[schoolHash] = false;
+        whatsappManualInitRequested[schoolHash] = false; // Reset da flag de inicialização manual
     });
 
     client.on('authenticated', () => {
@@ -1970,6 +1988,7 @@ app.get('/api/whatsapp/status', async (req, res) => {
             const schoolConfig = await ConfigService.getSchoolConfig(hash);
             if (schoolConfig) {
                 console.log(`[${schoolConfig.nome_fantasia || hash}] Tentando inicializar o WhatsApp via chamada de status...`);
+                whatsappManualInitRequested[hash] = true; // Marca como inicialização manual para exibir o QR Code
                 // Chama a inicialização de forma assíncrona
                 initWhatsApp(hash, schoolConfig);
                 status = 'INITIALIZING';
