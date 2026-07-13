@@ -344,21 +344,33 @@ async function getGreetingMessage(hash, studentId = null, studentName = null) {
     return { responseText: response, options, extraButtons };
 }
 
-// Retorna a mensagem de bloqueio formatada com a opção de falar com atendente
+// Retorna a mensagem de bloqueio formatada com a opção de falar com atendente e a opção Sair
 async function getBlockedResponse(hash) {
     const config = (await ConfigService.getSchoolConfig(hash)) || {};
     const atendimentoNumber = config.atendimento_numero ? config.atendimento_numero.toString().trim() : '';
     const atendenteOptions = [];
     let responseText = "Entre em contato com a escola para mais informações";
     
+    let optIndex = 1;
     if (atendimentoNumber) {
         atendenteOptions.push({
             id: 'atendente',
             label: 'Falar com atendente',
             url: `https://wa.me/${atendimentoNumber.replace(/\D/g, '')}`
         });
-        responseText += "\n\n1 - **Falar com atendente**\n\nDigite a opção desejada👇";
+        responseText += `\n\n${optIndex} - **Falar com atendente**`;
+        optIndex++;
     }
+    
+    // Adiciona o botão Sair
+    atendenteOptions.push({
+        id: 'sair',
+        label: 'Sair',
+        url: null
+    });
+    responseText += `\n${optIndex} - **Sair**`;
+    
+    responseText += "\n\nDigite a opção desejada👇";
     
     return {
         response: responseText,
@@ -969,7 +981,11 @@ async function chatHandler(req, res) {
 
     // Tratamento para quando o aluno está bloqueado e oferecemos apenas a opção de atendente
     if (session.step === 'BLOCKED_REDIRECT') {
-        if (cleanText === '1' || cleanText.includes('atendente') || cleanText.includes('atendimento') || cleanText.includes('falar') || cleanText.includes('suporte')) {
+        const hasAtendente = session.availableOptions && session.availableOptions.some(opt => opt.id === 'atendente');
+        const indexSair = hasAtendente ? '2' : '1';
+        const indexAtendente = '1';
+        
+        if (hasAtendente && (cleanText === indexAtendente || cleanText.includes('atendente') || cleanText.includes('atendimento') || cleanText.includes('falar') || cleanText.includes('suporte'))) {
             const config = (await ConfigService.getSchoolConfig(session.hash)) || {};
             const number = config.atendimento_numero ? config.atendimento_numero.replace(/\D/g, '') : '';
             const responseText = number 
@@ -985,7 +1001,20 @@ async function chatHandler(req, res) {
                 isIdentified: false
             });
         }
-        // Se digitou qualquer outra coisa, apenas resetamos para WELCOME e deixamos seguir
+        
+        // Se escolheu Sair (por índice correspondente ou por palavra-chave)
+        if (cleanText === indexSair || cleanText === 'sair' || cleanText === 'limpar' || cleanText === 'novo' || cleanText === 'menu') {
+            session.step = 'WELCOME';
+            session.student = null;
+            const greeting = await getGreetingMessage(session.hash, null, null);
+            return res.json({
+                response: greeting.responseText,
+                options: greeting.options,
+                isIdentified: false
+            });
+        }
+        
+        // Se digitou qualquer outra coisa, apenas resetamos para WELCOME e deixamos seguir o fluxo normal
         session.step = 'WELCOME';
         session.student = null;
     }
@@ -1027,17 +1056,21 @@ async function chatHandler(req, res) {
         if (!selectedOption) {
             selectedOption = options.find(opt => {
                 if (opt.id === 'financeiro') {
-                    return cleanText.includes('financeiro') || cleanText.includes('boleto') || cleanText === 'financeiro' || cleanText === 'boleto';
+                    return cleanText.includes('financeiro') || cleanText.includes('boleto') || cleanText.includes('parcela') || cleanText.includes('mensalidade') || cleanText.includes('carnê') || cleanText.includes('carne') || cleanText.includes('pix');
                 } else if (opt.id === 'horarios') {
-                    return cleanText.includes('horario') || cleanText.includes('horários') || cleanText.includes('aula');
+                    return cleanText.includes('horario') || cleanText.includes('horários') || cleanText.includes('aula') || cleanText.includes('dia');
                 } else if (opt.id === 'boletim') {
-                    return cleanText.includes('boletim') || cleanText.includes('nota') || cleanText.includes('prova') || cleanText.includes('grade');
+                    return cleanText.includes('boletim') || cleanText.includes('nota') || cleanText.includes('notas') || cleanText.includes('prova') || cleanText.includes('grade');
                 } else if (opt.id === 'plataforma') {
-                    return cleanText.includes('plataforma') || cleanText.includes('acesso') || cleanText.includes('login') || cleanText.includes('senha') || cleanText.includes('evolua') || cleanText.includes('om') || cleanText.includes('gillis') || cleanText.includes('dkapp');
+                    return cleanText.includes('plataforma') || cleanText.includes('acesso') || cleanText.includes('login') || cleanText.includes('senha') || cleanText.includes('portal') || cleanText.includes('evolua') || cleanText.includes('ouro') || cleanText.includes('gillis') || cleanText.includes('app');
                 } else if (opt.id === 'conteudo') {
-                    return cleanText.includes('conteudo') || cleanText.includes('conteúdo') || cleanText.includes('material') || cleanText.includes('online');
+                    return cleanText.includes('conteudo') || cleanText.includes('conteúdo') || cleanText.includes('material') || cleanText.includes('pdf') || cleanText.includes('vídeo') || cleanText.includes('video') || cleanText.includes('online');
+                } else if (opt.id === 'validador') {
+                    return cleanText.includes('validador') || cleanText.includes('validação') || cleanText.includes('validacao') || cleanText.includes('certificado') || cleanText.includes('comprovação') || cleanText.includes('comprovacao');
                 } else if (opt.id === 'atendente') {
-                    return cleanText.includes('atendente') || cleanText.includes('atendimento') || cleanText.includes('falar') || cleanText.includes('suporte');
+                    return cleanText.includes('atendente') || cleanText.includes('atendimento') || cleanText.includes('falar') || cleanText.includes('suporte') || cleanText.includes('secretaria') || cleanText.includes('secretária');
+                } else if (opt.id === 'cadastro') {
+                    return cleanText.includes('cadastro') || cleanText.includes('interessado') || cleanText.includes('matrícula') || cleanText.includes('matricula') || cleanText.includes('inscrição') || cleanText.includes('inscricao') || cleanText.includes('atendente') || cleanText.includes('secretaria') || cleanText.includes('secretária') || cleanText.includes('suporte');
                 }
                 return false;
             });
@@ -2065,7 +2098,7 @@ app.get('/api/whatsapp/status', async (req, res) => {
 app.post('/api/whatsapp/disconnect', async (req, res) => {
     const { hash } = req.body;
     if (!hash) {
-        return res.status(400).json({ error: 'O hash da escola é obrigatório.' });
+        return res.status(400).json({ error: 'O código da escola é obrigatório. Entre novamente pelo painel admin.' });
     }
 
     const client = whatsappClients[hash];
@@ -2110,5 +2143,5 @@ app.post('/api/whatsapp/disconnect', async (req, res) => {
 
 // Inicialização do servidor
 app.listen(PORT, () => {
-    console.log(`Servidor rodando em http://localhost:${PORT}`);
+    console.log(`Servidor rodando na porta ${PORT}`);
 });

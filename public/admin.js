@@ -193,7 +193,7 @@ async function loadConfig() {
             const infoData = await infoResponse.json();
             const headerTitle = document.getElementById('adminTitleHeader');
             if (headerTitle && infoData.id_atendimento && infoData.nome_fantasia) {
-                headerTitle.textContent = `Painel de Configuração do ChatBot - Escola ${infoData.id_atendimento} (${infoData.nome_fantasia})`;
+                headerTitle.textContent = `Painel de Configuração do DKChatBot - Escola ${infoData.id_atendimento} (${infoData.nome_fantasia})`;
             }
         } catch (infoErr) {
             console.error('Erro ao carregar detalhes da empresa no cabeçalho:', infoErr);
@@ -271,7 +271,7 @@ function showAlert(type, message) {
 }
 
 // Bloqueia ou desbloqueia botoes de acao
-function setButtonsState(disabled, textTest = 'Testar Conexão', textSave = 'Salvar') {
+function setButtonsState(disabled, textTest = 'Testar Conexão', textSave = 'Salvar Configurações') {
     testBtn.disabled = disabled;
     saveBtn.disabled = disabled;
     
@@ -350,7 +350,7 @@ async function testConnection() {
         setButtonsState(false);
         
         if (data.success) {
-            showAlert('success', 'Conexão com o banco de dados da escola realizada com sucesso! 🎉');
+            showAlert('success', 'Conexão realizada com sucesso! 🎉');
         } else {
             showAlert('error', `Falha na conexão: ${data.error}`);
         }
@@ -573,7 +573,7 @@ if (waActivateBtn) {
         showCustomModal({
             title: 'Boas Práticas e Termos de Uso',
             message: `Para garantir o bom funcionamento do seu ChatBot, atente-se às seguintes diretrizes:<br><br>
-                      1. <strong>Respostas Automáticas:</strong> O assistente responderá às mensagens recebidas de forma 100% autônoma.<br><br>
+                      1. <strong>Respostas Automáticas:</strong> O assistente responderá às mensagens recebidas de forma 100% autônoma.<br><br>Enviar mensagens manualmente não interromperá o assistente.<br><br>
                       2. <strong>Número Exclusivo:</strong> É altamente recomendado utilizar um chip/número exclusivo para o bot, para evitar conflito com conversas pessoais ou de atendimento humano.<br><br>
                       3. <strong>Políticas da Meta:</strong> Caso ocorra algum tipo de banimento ou restrição ao número por parte do WhatsApp (Meta), a responsabilidade e a solicitação de suporte/desbloqueio devem ser feitas diretamente à Meta.`,
             icon: '📢',
