@@ -501,48 +501,64 @@ async function checkWhatsAppStatus() {
         const data = await response.json();
         
         if (data.status === 'INITIALIZING') {
-            waStatusText.textContent = 'Inicializando WhatsApp...';
-            waStatusText.style.color = 'var(--text-primary)';
-            waQrContainer.style.display = 'none';
-            waIconContainer.style.display = 'block';
-            waIconContainer.textContent = '⏳';
-            waDisconnectBtn.style.display = 'none';
-            waActivateBtn.style.display = 'none';
-        } else if (data.status === 'QR_READY') {
-            waStatusText.textContent = 'Aguardando leitura do QR Code... Se já conectou no celular, aguarde.';
-            waStatusText.style.color = '#d97706'; // amber
-            
-            if (data.qr) {
-                waQrImage.src = data.qr;
-                waQrContainer.style.display = 'block';
-                waIconContainer.style.display = 'none';
-            } else {
-                waQrContainer.style.display = 'none';
+            if (waStatusText) {
+                waStatusText.textContent = 'Inicializando WhatsApp...';
+                waStatusText.style.color = 'var(--text-primary)';
+            }
+            if (waQrContainer) waQrContainer.style.display = 'none';
+            if (waIconContainer) {
                 waIconContainer.style.display = 'block';
                 waIconContainer.textContent = '⏳';
             }
-            waDisconnectBtn.style.display = 'none';
-            waActivateBtn.style.display = 'none';
+            if (waDisconnectBtn) waDisconnectBtn.style.display = 'none';
+            if (waActivateBtn) waActivateBtn.style.display = 'none';
+        } else if (data.status === 'QR_READY') {
+            if (waStatusText) {
+                waStatusText.textContent = 'Aguardando leitura do QR Code... Se já conectou no celular, aguarde.';
+                waStatusText.style.color = '#d97706'; // amber
+            }
+            
+            if (data.qr) {
+                if (waQrImage) waQrImage.src = data.qr;
+                if (waQrContainer) waQrContainer.style.display = 'block';
+                if (waIconContainer) waIconContainer.style.display = 'none';
+            } else {
+                if (waQrContainer) waQrContainer.style.display = 'none';
+                if (waIconContainer) {
+                    waIconContainer.style.display = 'block';
+                    waIconContainer.textContent = '⏳';
+                }
+            }
+            if (waDisconnectBtn) waDisconnectBtn.style.display = 'none';
+            if (waActivateBtn) waActivateBtn.style.display = 'none';
         } else if (data.status === 'CONNECTED') {
             let infoText = 'WhatsApp Conectado! Chatbot ativo.';
             if (data.info && data.info.pushname) {
                 infoText = `Conectado como: <strong>${data.info.pushname}</strong> (${data.info.wid || ''})`;
             }
-            waStatusText.innerHTML = infoText;
-            waStatusText.style.color = '#059669'; // green/emerald
-            waQrContainer.style.display = 'none';
-            waIconContainer.style.display = 'block';
-            waIconContainer.textContent = '✅';
-            waDisconnectBtn.style.display = 'inline-block';
-            waActivateBtn.style.display = 'none';
+            if (waStatusText) {
+                waStatusText.innerHTML = infoText;
+                waStatusText.style.color = '#059669'; // green/emerald
+            }
+            if (waQrContainer) waQrContainer.style.display = 'none';
+            if (waIconContainer) {
+                waIconContainer.style.display = 'block';
+                waIconContainer.textContent = '✅';
+            }
+            if (waDisconnectBtn) waDisconnectBtn.style.display = 'inline-block';
+            if (waActivateBtn) waActivateBtn.style.display = 'none';
         } else {
-            waStatusText.textContent = 'Desconectado';
-            waStatusText.style.color = '#ef4444'; // red
-            waQrContainer.style.display = 'none';
-            waIconContainer.style.display = 'block';
-            waIconContainer.textContent = '❌';
-            waDisconnectBtn.style.display = 'none';
-            waActivateBtn.style.display = 'inline-block';
+            if (waStatusText) {
+                waStatusText.textContent = 'Desconectado';
+                waStatusText.style.color = '#ef4444'; // red
+            }
+            if (waQrContainer) waQrContainer.style.display = 'none';
+            if (waIconContainer) {
+                waIconContainer.style.display = 'block';
+                waIconContainer.textContent = '❌';
+            }
+            if (waDisconnectBtn) waDisconnectBtn.style.display = 'none';
+            if (waActivateBtn) waActivateBtn.style.display = 'inline-block';
         }
     } catch (err) {
         console.error('Erro ao verificar status do WhatsApp:', err);
@@ -550,69 +566,77 @@ async function checkWhatsAppStatus() {
 }
 
 // Ativar o WhatsApp (exibe modal de boas práticas antes de conectar)
-waActivateBtn.addEventListener('click', () => {
-    if (!hash) return;
-    
-    showCustomModal({
-        title: 'Boas Práticas e Termos de Uso',
-        message: `Para garantir o bom funcionamento do seu ChatBot, atente-se às seguintes diretrizes:<br><br>
-                  1. <strong>Respostas Automáticas:</strong> O assistente responderá às mensagens recebidas de forma 100% autônoma.<br><br>
-                  2. <strong>Número Exclusivo:</strong> É altamente recomendado utilizar um chip/número exclusivo para o bot, para evitar conflito com conversas pessoais ou de atendimento humano.<br><br>
-                  3. <strong>Políticas da Meta:</strong> Caso ocorra algum tipo de banimento ou restrição ao número por parte do WhatsApp (Meta), a responsabilidade e a solicitação de suporte/desbloqueio devem ser feitas diretamente à Meta.`,
-        icon: '📢',
-        isConfirm: true,
-        confirmText: 'Estou de acordo',
-        cancelText: 'Cancelar',
-        confirmBg: '#10b981',
-        confirmBorder: '#10b981',
-        onConfirm: async () => {
-            waStatusText.textContent = 'Inicializando WhatsApp...';
-            waStatusText.style.color = 'var(--text-primary)';
-            waQrContainer.style.display = 'none';
-            waIconContainer.style.display = 'block';
-            waIconContainer.textContent = '⏳';
-            waActivateBtn.style.display = 'none';
-            
-            try {
-                const response = await fetch(`/api/whatsapp/status?hash=${hash}&init=true`);
-                const data = await response.json();
-                checkWhatsAppStatus();
-            } catch (err) {
-                console.error('Erro ao iniciar o WhatsApp:', err);
-                showCustomModal({ title: 'Erro', message: 'Falha ao iniciar o WhatsApp. Tente novamente.', icon: '❌' });
+if (waActivateBtn) {
+    waActivateBtn.addEventListener('click', () => {
+        if (!hash) return;
+        
+        showCustomModal({
+            title: 'Boas Práticas e Termos de Uso',
+            message: `Para garantir o bom funcionamento do seu ChatBot, atente-se às seguintes diretrizes:<br><br>
+                      1. <strong>Respostas Automáticas:</strong> O assistente responderá às mensagens recebidas de forma 100% autônoma.<br><br>
+                      2. <strong>Número Exclusivo:</strong> É altamente recomendado utilizar um chip/número exclusivo para o bot, para evitar conflito com conversas pessoais ou de atendimento humano.<br><br>
+                      3. <strong>Políticas da Meta:</strong> Caso ocorra algum tipo de banimento ou restrição ao número por parte do WhatsApp (Meta), a responsabilidade e a solicitação de suporte/desbloqueio devem ser feitas diretamente à Meta.`,
+            icon: '📢',
+            isConfirm: true,
+            confirmText: 'Estou de acordo',
+            cancelText: 'Cancelar',
+            confirmBg: '#10b981',
+            confirmBorder: '#10b981',
+            onConfirm: async () => {
+                if (waStatusText) {
+                    waStatusText.textContent = 'Inicializando WhatsApp...';
+                    waStatusText.style.color = 'var(--text-primary)';
+                }
+                if (waQrContainer) waQrContainer.style.display = 'none';
+                if (waIconContainer) {
+                    waIconContainer.style.display = 'block';
+                    waIconContainer.textContent = '⏳';
+                }
+                if (waActivateBtn) waActivateBtn.style.display = 'none';
+                
+                try {
+                    const response = await fetch(`/api/whatsapp/status?hash=${hash}&init=true`);
+                    const data = await response.json();
+                    checkWhatsAppStatus();
+                } catch (err) {
+                    console.error('Erro ao iniciar o WhatsApp:', err);
+                    showCustomModal({ title: 'Erro', message: 'Falha ao iniciar o WhatsApp. Tente novamente.', icon: '❌' });
+                }
             }
-        }
+        });
     });
-});
+}
 
 // Desconectar o WhatsApp
-waDisconnectBtn.addEventListener('click', () => {
-    if (!hash) return;
-    showCustomModal({
-        title: 'Desconectar WhatsApp',
-        message: 'Deseja realmente desconectar este WhatsApp? Isso pausará o chatbot de responder a novas mensagens de WhatsApp.',
-        icon: '⚠️',
-        isConfirm: true,
-        onConfirm: async () => {
-            waDisconnectBtn.disabled = true;
-            waStatusText.textContent = 'Desconectando...';
-            try {
-                const response = await fetch('/api/whatsapp/disconnect', { 
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ hash })
-                });
-                await response.json();
-                waDisconnectBtn.disabled = false;
-                checkWhatsAppStatus();
-            } catch (err) {
-                waDisconnectBtn.disabled = false;
-                console.error('Erro ao desconectar WhatsApp:', err);
-                showCustomModal({ title: 'Erro', message: 'Falha ao desconectar o WhatsApp.', icon: '❌' });
+if (waDisconnectBtn) {
+    waDisconnectBtn.addEventListener('click', () => {
+        if (!hash) return;
+        showCustomModal({
+            title: 'Desconectar WhatsApp',
+            message: 'Deseja realmente desconectar este WhatsApp? Isso pausará o chatbot de responder a novas mensagens de WhatsApp.',
+            icon: '⚠️',
+            isConfirm: true,
+            onConfirm: async () => {
+                waDisconnectBtn.disabled = true;
+                if (waStatusText) waStatusText.textContent = 'Desconectando...';
+                try {
+                    const response = await fetch('/api/whatsapp/disconnect', { 
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ hash })
+                    });
+                    await response.json();
+                    waDisconnectBtn.disabled = false;
+                    checkWhatsAppStatus();
+                } catch (err) {
+                    waDisconnectBtn.disabled = false;
+                    console.error('Erro ao desconectar WhatsApp:', err);
+                    showCustomModal({ title: 'Erro', message: 'Falha ao desconectar o WhatsApp.', icon: '❌' });
+                }
             }
-        }
+        });
     });
-});
+}
 
 // Atualizar status manualmente com cooldown de 60 segundos
 if (waRefreshBtn) {

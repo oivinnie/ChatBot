@@ -1855,9 +1855,15 @@ async function initWhatsApp(schoolHash, schoolConfig) {
             whatsappStatuses[schoolHash] = 'DISCONNECTED';
             whatsappQrData[schoolHash] = null;
             isInitializingWhatsApp[schoolHash] = false;
-            destroyWhatsAppClient(schoolHash).then(() => {
-                cleanSessionFolder(schoolHash);
-            });
+            
+            setTimeout(async () => {
+                try {
+                    await destroyWhatsAppClient(schoolHash);
+                    await cleanSessionFolder(schoolHash);
+                } catch (destroyErr) {
+                    console.error(`[${schoolHash}] Erro ao destruir cliente zumbi do startup:`, destroyErr.message);
+                }
+            }, 1000);
             return;
         }
 
