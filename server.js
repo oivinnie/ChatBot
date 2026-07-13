@@ -1610,7 +1610,7 @@ app.get('/api/info', async (req, res) => {
             widget_position: school ? (school.widget_position || 'right') : 'right',
             widget_text: school ? (school.widget_text || 'Posso ajudar?') : 'Posso ajudar?',
             widget_width: 400,
-            widget_height: 600,
+            widget_height: 680,
             widget_side: 20,
             widget_bottom: 20
         });

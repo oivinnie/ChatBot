@@ -48,11 +48,12 @@
         const bottom = parseInt(config.widget_bottom) || 20;
         const side = parseInt(config.widget_side) || 20;
         const width = parseInt(config.widget_width) || 400;
-        const height = parseInt(config.widget_height) || 600;
+        const height = parseInt(config.widget_height) || 680;
 
         const containerBottom = bottom + 75;
 
         const style = document.createElement('style');
+        style.id = 'dk-widget-styles';
         style.innerHTML = `
             .dk-chat-widget-launcher {
                 position: fixed;
@@ -171,15 +172,18 @@
         let primaryColor = '#4f46e5';
         let config = {};
 
-        try {
-            const response = await fetch(`${hostUrl}/api/info?hash=${hash}`);
-            config = await response.json();
-            if (config.emoji) botEmoji = config.emoji;
-            if (config.theme && themeColors[config.theme]) {
-                primaryColor = themeColors[config.theme];
+        const cacheKey = `bot_info_${hash}`;
+        const cachedConfig = localStorage.getItem(cacheKey);
+        if (cachedConfig) {
+            try {
+                config = JSON.parse(cachedConfig);
+                if (config.emoji) botEmoji = config.emoji;
+                if (config.theme && themeColors[config.theme]) {
+                    primaryColor = themeColors[config.theme];
+                }
+            } catch (e) {
+                console.error('Erro ao ler cache do widget config:', e);
             }
-        } catch (err) {
-            console.error('Erro ao carregar tema dinâmico para widget:', err);
         }
 
         // Injeta os estilos dinâmicos
@@ -214,6 +218,52 @@
 
         // Adiciona evento de clique para abrir/fechar o widget
         launcher.onclick = toggleWidget;
+
+        // Faz a requisição em background para atualizar as configurações e cache
+        fetch(`${hostUrl}/api/info?hash=${hash}`)
+            .then(res => res.json())
+            .then(newConfig => {
+                localStorage.setItem(cacheKey, JSON.stringify(newConfig));
+                
+                // Se algo mudou, atualiza dinamicamente
+                let needsUpdate = false;
+                if (newConfig.emoji && newConfig.emoji !== botEmoji) {
+                    botEmoji = newConfig.emoji;
+                    needsUpdate = true;
+                }
+                let newPrimary = '#4f46e5';
+                if (newConfig.theme && themeColors[newConfig.theme]) {
+                    newPrimary = themeColors[newConfig.theme];
+                }
+                if (newPrimary !== primaryColor) {
+                    primaryColor = newPrimary;
+                    needsUpdate = true;
+                }
+                
+                // Também atualiza se o texto ou dimensões mudaram
+                if (newConfig.widget_text !== config.widget_text || 
+                    newConfig.widget_height !== config.widget_height || 
+                    newConfig.widget_width !== config.widget_width ||
+                    newConfig.widget_position !== config.widget_position) {
+                    needsUpdate = true;
+                }
+
+                if (needsUpdate) {
+                    const oldStyle = document.querySelector('style[id="dk-widget-styles"]');
+                    if (oldStyle) oldStyle.remove();
+                    injectStyles(newConfig);
+                    
+                    if (launcher) {
+                        launcher.style.backgroundColor = primaryColor;
+                        if (!isOpen) launcher.innerHTML = botEmoji;
+                    }
+                    if (bubble) {
+                        const newBubbleText = (newConfig.widget_text || 'Posso ajudar?').trim().substring(0, 20);
+                        bubble.textContent = newBubbleText;
+                    }
+                }
+            })
+            .catch(err => console.error('Erro ao atualizar tema dinâmico para widget:', err));
     }
 
     function toggleWidget() {

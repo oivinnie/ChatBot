@@ -216,20 +216,16 @@ function sendQuickMessage(text) {
     sendMessage(text);
 }
 
-// Inicializa a conversa com a saudação inicial do chatbot
-async function initChat() {
-    showTypingIndicator();
-    
-    // Carrega informações dinâmicas do Bot (título, emoji e tema)
-    try {
-        const infoResponse = await fetch(`/api/info?hash=${hash}`);
-        const infoData = await infoResponse.json();
-        
-        if (infoData.title) {
-            document.querySelector('.header-title h1').textContent = infoData.title;
-            document.title = infoData.title;
-        }
-        const headerLogoEl = document.querySelector('.header-logo');
+// Aplica as informações dinâmicas do Bot (título, emoji, logo e tema) na interface do chat
+function applyBotInfo(infoData) {
+    if (!infoData) return;
+    if (infoData.title) {
+        const titleEl = document.querySelector('.header-title h1');
+        if (titleEl) titleEl.textContent = infoData.title;
+        document.title = infoData.title;
+    }
+    const headerLogoEl = document.querySelector('.header-logo');
+    if (headerLogoEl) {
         if (infoData.logo) {
             headerLogoEl.style.display = 'none';
             let customLogo = document.querySelector('.header-custom-logo');
@@ -254,26 +250,55 @@ async function initChat() {
                 customLogo.style.display = 'none';
             }
         }
-        if (infoData.theme) {
-            applyTheme(infoData.theme);
+    }
+    if (infoData.theme) {
+        applyTheme(infoData.theme);
+    }
+}
+
+// Inicializa a conversa com a saudação inicial do chatbot
+async function initChat() {
+    showTypingIndicator();
+    
+    // Tenta carregar imediatamente do cache local para evitar piscadas
+    const cacheKey = `bot_info_${hash}`;
+    const cachedInfo = localStorage.getItem(cacheKey);
+    if (cachedInfo) {
+        try {
+            applyBotInfo(JSON.parse(cachedInfo));
+        } catch (e) {
+            console.error('Erro ao ler cache do bot info:', e);
         }
-    } catch (err) {
-        console.error('Erro ao carregar informações do bot:', err);
     }
     
-    try {
-        const response = await fetch('/api/chat', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                sessionId: sessionId,
-                message: 'menu', // Força exibição do menu de saudação inicial
-                hash: hash
-            })
+    // Inicia as requisições em paralelo para carregar mais rápido
+    const infoPromise = fetch(`/api/info?hash=${hash}`)
+        .then(res => res.json())
+        .then(infoData => {
+            localStorage.setItem(cacheKey, JSON.stringify(infoData));
+            applyBotInfo(infoData);
+            return infoData;
+        })
+        .catch(err => {
+            console.error('Erro ao carregar informações do bot:', err);
+            return null;
         });
-        const data = await response.json();
+
+    const chatPromise = fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            sessionId: sessionId,
+            message: 'menu', // Força exibição do menu de saudação inicial
+            hash: hash
+        })
+    }).then(res => res.json());
+
+    // Aguarda a resposta do chat e atualiza a tela
+    try {
+        const data = await chatPromise;
         removeTypingIndicator();
         if (data.response) {
             appendMessage('bot', data.response, data.options, data.isIdentified, data.extraButtons);
