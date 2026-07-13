@@ -1955,8 +1955,9 @@ app.get('/api/whatsapp/status', async (req, res) => {
     const client = whatsappClients[hash];
     let connectionInfo = null;
 
-    // Se o status for DISCONNECTED e não estiver inicializando, tenta iniciar automaticamente o cliente (útil para cliques em 'Atualizar')
-    if (status === 'DISCONNECTED' && !isInitializingWhatsApp[hash]) {
+    // Se o status for DISCONNECTED e não estiver inicializando, tenta iniciar o cliente apenas se 'init=true' for passado
+    const shouldInit = req.query.init === 'true';
+    if (status === 'DISCONNECTED' && !isInitializingWhatsApp[hash] && shouldInit) {
         try {
             const schoolConfig = await ConfigService.getSchoolConfig(hash);
             if (schoolConfig) {

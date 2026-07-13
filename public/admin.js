@@ -205,7 +205,7 @@ async function loadConfig() {
 }
 
 // Exibe o modal customizado de alerta ou confirmação
-function showCustomModal({ title, message, icon = '⚠️', isConfirm = false, onConfirm, onCancel }) {
+function showCustomModal({ title, message, icon = '⚠️', isConfirm = false, onConfirm, onCancel, confirmText, cancelText, confirmBg, confirmBorder }) {
     const modal = document.getElementById('customModal');
     const mTitle = document.getElementById('modalTitle');
     const mBody = document.getElementById('modalBody');
@@ -214,20 +214,21 @@ function showCustomModal({ title, message, icon = '⚠️', isConfirm = false, o
     const btnConfirm = document.getElementById('modalConfirmBtn');
 
     mTitle.textContent = title || 'Atenção';
-    mBody.textContent = message || '';
+    mBody.innerHTML = message || '';
     mIcon.textContent = icon;
 
     if (isConfirm) {
         btnCancel.style.display = 'inline-block';
-        btnConfirm.textContent = 'Sim, Desconectar';
-        btnConfirm.style.background = '#ef4444';
-        btnConfirm.style.borderColor = '#ef4444';
+        btnCancel.textContent = cancelText || 'Cancelar';
+        btnConfirm.textContent = confirmText || 'Sim, Desconectar';
+        btnConfirm.style.background = confirmBg || '#ef4444';
+        btnConfirm.style.borderColor = confirmBorder || '#ef4444';
         btnConfirm.style.color = '#ffffff';
     } else {
         btnCancel.style.display = 'none';
-        btnConfirm.textContent = 'OK';
-        btnConfirm.style.background = '#4f46e5';
-        btnConfirm.style.borderColor = '#4f46e5';
+        btnConfirm.textContent = confirmText || 'OK';
+        btnConfirm.style.background = confirmBg || '#4f46e5';
+        btnConfirm.style.borderColor = confirmBorder || '#4f46e5';
         btnConfirm.style.color = '#ffffff';
     }
 
@@ -491,6 +492,7 @@ const waQrImage = document.getElementById('waQrImage');
 const waIconContainer = document.getElementById('waIconContainer');
 const waDisconnectBtn = document.getElementById('waDisconnectBtn');
 const waRefreshBtn = document.getElementById('waRefreshBtn');
+const waActivateBtn = document.getElementById('waActivateBtn');
 
 async function checkWhatsAppStatus() {
     if (!hash) return;
@@ -505,6 +507,7 @@ async function checkWhatsAppStatus() {
             waIconContainer.style.display = 'block';
             waIconContainer.textContent = '⏳';
             waDisconnectBtn.style.display = 'none';
+            waActivateBtn.style.display = 'none';
         } else if (data.status === 'QR_READY') {
             waStatusText.textContent = 'Aguardando leitura do QR Code... Se já conectou no celular, aguarde.';
             waStatusText.style.color = '#d97706'; // amber
@@ -519,6 +522,7 @@ async function checkWhatsAppStatus() {
                 waIconContainer.textContent = '⏳';
             }
             waDisconnectBtn.style.display = 'none';
+            waActivateBtn.style.display = 'none';
         } else if (data.status === 'CONNECTED') {
             let infoText = 'WhatsApp Conectado! Chatbot ativo.';
             if (data.info && data.info.pushname) {
@@ -530,6 +534,7 @@ async function checkWhatsAppStatus() {
             waIconContainer.style.display = 'block';
             waIconContainer.textContent = '✅';
             waDisconnectBtn.style.display = 'inline-block';
+            waActivateBtn.style.display = 'none';
         } else {
             waStatusText.textContent = 'Desconectado';
             waStatusText.style.color = '#ef4444'; // red
@@ -537,11 +542,48 @@ async function checkWhatsAppStatus() {
             waIconContainer.style.display = 'block';
             waIconContainer.textContent = '❌';
             waDisconnectBtn.style.display = 'none';
+            waActivateBtn.style.display = 'inline-block';
         }
     } catch (err) {
         console.error('Erro ao verificar status do WhatsApp:', err);
     }
 }
+
+// Ativar o WhatsApp (exibe modal de boas práticas antes de conectar)
+waActivateBtn.addEventListener('click', () => {
+    if (!hash) return;
+    
+    showCustomModal({
+        title: 'Boas Práticas e Termos de Uso',
+        message: `Para garantir o bom funcionamento do seu ChatBot, atente-se às seguintes diretrizes:<br><br>
+                  1. <strong>Respostas Automáticas:</strong> O assistente responderá às mensagens recebidas de forma 100% autônoma.<br><br>
+                  2. <strong>Número Exclusivo:</strong> É altamente recomendado utilizar um chip/número exclusivo para o bot, para evitar conflito com conversas pessoais ou de atendimento humano.<br><br>
+                  3. <strong>Políticas da Meta:</strong> Caso ocorra algum tipo de banimento ou restrição ao número por parte do WhatsApp (Meta), a responsabilidade e a solicitação de suporte/desbloqueio devem ser feitas diretamente à Meta.`,
+        icon: '📢',
+        isConfirm: true,
+        confirmText: 'Estou de acordo',
+        cancelText: 'Cancelar',
+        confirmBg: '#10b981',
+        confirmBorder: '#10b981',
+        onConfirm: async () => {
+            waStatusText.textContent = 'Inicializando WhatsApp...';
+            waStatusText.style.color = 'var(--text-primary)';
+            waQrContainer.style.display = 'none';
+            waIconContainer.style.display = 'block';
+            waIconContainer.textContent = '⏳';
+            waActivateBtn.style.display = 'none';
+            
+            try {
+                const response = await fetch(`/api/whatsapp/status?hash=${hash}&init=true`);
+                const data = await response.json();
+                checkWhatsAppStatus();
+            } catch (err) {
+                console.error('Erro ao iniciar o WhatsApp:', err);
+                showCustomModal({ title: 'Erro', message: 'Falha ao iniciar o WhatsApp. Tente novamente.', icon: '❌' });
+            }
+        }
+    });
+});
 
 // Desconectar o WhatsApp
 waDisconnectBtn.addEventListener('click', () => {

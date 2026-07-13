@@ -167,25 +167,47 @@
         document.head.appendChild(style);
     }
 
-    // Carrega informações do bot para customizar o widget dinamicamente
-    async function initWidget() {
-        let primaryColor = '#4f46e5';
-        let config = {};
+    let throbberEl = null;
 
-        const cacheKey = `bot_info_${hash}`;
-        const cachedConfig = localStorage.getItem(cacheKey);
-        if (cachedConfig) {
-            try {
-                config = JSON.parse(cachedConfig);
-                if (config.emoji) botEmoji = config.emoji;
-                if (config.theme && themeColors[config.theme]) {
-                    primaryColor = themeColors[config.theme];
+    function showThrobber() {
+        if (throbberEl) return;
+        
+        if (!document.getElementById('dk-throbber-animation')) {
+            const anim = document.createElement('style');
+            anim.id = 'dk-throbber-animation';
+            anim.innerHTML = `
+                @keyframes dk-throbber-spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
                 }
-            } catch (e) {
-                console.error('Erro ao ler cache do widget config:', e);
-            }
+            `;
+            document.head.appendChild(anim);
         }
 
+        throbberEl = document.createElement('div');
+        throbberEl.id = 'dk-chat-widget-throbber';
+        throbberEl.style.position = 'fixed';
+        throbberEl.style.bottom = '30px';
+        throbberEl.style.right = '30px';
+        throbberEl.style.width = '30px';
+        throbberEl.style.height = '30px';
+        throbberEl.style.borderRadius = '50%';
+        throbberEl.style.border = '3px solid rgba(0, 0, 0, 0.08)';
+        throbberEl.style.borderTopColor = '#4f46e5';
+        throbberEl.style.animation = 'dk-throbber-spin 1s infinite linear';
+        throbberEl.style.zIndex = '999999';
+        
+        document.body.appendChild(throbberEl);
+    }
+
+    function hideThrobber() {
+        if (throbberEl) {
+            throbberEl.remove();
+            throbberEl = null;
+        }
+    }
+
+    function buildWidget(config, primaryColor) {
         // Injeta os estilos dinâmicos
         injectStyles(config);
 
@@ -218,52 +240,99 @@
 
         // Adiciona evento de clique para abrir/fechar o widget
         launcher.onclick = toggleWidget;
+    }
 
-        // Faz a requisição em background para atualizar as configurações e cache
-        fetch(`${hostUrl}/api/info?hash=${hash}`)
-            .then(res => res.json())
-            .then(newConfig => {
-                localStorage.setItem(cacheKey, JSON.stringify(newConfig));
-                
-                // Se algo mudou, atualiza dinamicamente
-                let needsUpdate = false;
-                if (newConfig.emoji && newConfig.emoji !== botEmoji) {
-                    botEmoji = newConfig.emoji;
-                    needsUpdate = true;
+    function updateWidgetIfChanged(config, newConfig) {
+        let needsUpdate = false;
+        
+        let newBotEmoji = newConfig.emoji || '🤖';
+        if (newBotEmoji !== botEmoji) {
+            botEmoji = newBotEmoji;
+            needsUpdate = true;
+        }
+
+        let newPrimary = '#4f46e5';
+        if (newConfig.theme && themeColors[newConfig.theme]) {
+            newPrimary = themeColors[newConfig.theme];
+        }
+
+        if (newConfig.widget_text !== config.widget_text || 
+            newConfig.widget_height !== config.widget_height || 
+            newConfig.widget_width !== config.widget_width ||
+            newConfig.widget_position !== config.widget_position ||
+            newConfig.widget_bottom !== config.widget_bottom ||
+            newConfig.widget_side !== config.widget_side) {
+            needsUpdate = true;
+        }
+
+        if (needsUpdate) {
+            const oldStyle = document.querySelector('style[id="dk-widget-styles"]');
+            if (oldStyle) oldStyle.remove();
+            
+            injectStyles(newConfig);
+            
+            if (launcher) {
+                launcher.style.backgroundColor = newPrimary;
+                if (!isOpen) launcher.innerHTML = botEmoji;
+            }
+            if (bubble) {
+                const newBubbleText = (newConfig.widget_text || 'Posso ajudar?').trim().substring(0, 20);
+                bubble.textContent = newBubbleText;
+            }
+        }
+    }
+
+    // Carrega informações do bot para customizar o widget dinamicamente
+    async function initWidget() {
+        let primaryColor = '#4f46e5';
+        let config = {};
+
+        const cacheKey = `bot_info_${hash}`;
+        const cachedConfig = localStorage.getItem(cacheKey);
+        
+        let hasCache = false;
+        if (cachedConfig) {
+            try {
+                config = JSON.parse(cachedConfig);
+                if (config.emoji) botEmoji = config.emoji;
+                if (config.theme && themeColors[config.theme]) {
+                    primaryColor = themeColors[config.theme];
                 }
-                let newPrimary = '#4f46e5';
+                hasCache = true;
+            } catch (e) {
+                console.error('Erro ao ler cache do widget config:', e);
+            }
+        }
+
+        if (hasCache) {
+            buildWidget(config, primaryColor);
+        } else {
+            showThrobber();
+        }
+
+        // Faz a requisição para obter configurações atualizadas
+        try {
+            const res = await fetch(`${hostUrl}/api/info?hash=${hash}`);
+            const newConfig = await res.json();
+            localStorage.setItem(cacheKey, JSON.stringify(newConfig));
+            
+            if (!hasCache) {
+                hideThrobber();
+                if (newConfig.emoji) botEmoji = newConfig.emoji;
                 if (newConfig.theme && themeColors[newConfig.theme]) {
-                    newPrimary = themeColors[newConfig.theme];
+                    primaryColor = themeColors[newConfig.theme];
                 }
-                if (newPrimary !== primaryColor) {
-                    primaryColor = newPrimary;
-                    needsUpdate = true;
-                }
-                
-                // Também atualiza se o texto ou dimensões mudaram
-                if (newConfig.widget_text !== config.widget_text || 
-                    newConfig.widget_height !== config.widget_height || 
-                    newConfig.widget_width !== config.widget_width ||
-                    newConfig.widget_position !== config.widget_position) {
-                    needsUpdate = true;
-                }
-
-                if (needsUpdate) {
-                    const oldStyle = document.querySelector('style[id="dk-widget-styles"]');
-                    if (oldStyle) oldStyle.remove();
-                    injectStyles(newConfig);
-                    
-                    if (launcher) {
-                        launcher.style.backgroundColor = primaryColor;
-                        if (!isOpen) launcher.innerHTML = botEmoji;
-                    }
-                    if (bubble) {
-                        const newBubbleText = (newConfig.widget_text || 'Posso ajudar?').trim().substring(0, 20);
-                        bubble.textContent = newBubbleText;
-                    }
-                }
-            })
-            .catch(err => console.error('Erro ao atualizar tema dinâmico para widget:', err));
+                buildWidget(newConfig, primaryColor);
+            } else {
+                updateWidgetIfChanged(config, newConfig);
+            }
+        } catch (err) {
+            console.error('Erro ao atualizar tema dinâmico para widget:', err);
+            if (!hasCache) {
+                hideThrobber();
+                buildWidget(config, primaryColor);
+            }
+        }
     }
 
     function toggleWidget() {
