@@ -344,6 +344,29 @@ async function getGreetingMessage(hash, studentId = null, studentName = null) {
     return { responseText: response, options, extraButtons };
 }
 
+// Retorna a mensagem de bloqueio formatada com a opção de falar com atendente
+async function getBlockedResponse(hash) {
+    const config = (await ConfigService.getSchoolConfig(hash)) || {};
+    const atendimentoNumber = config.atendimento_numero ? config.atendimento_numero.toString().trim() : '';
+    const atendenteOptions = [];
+    let responseText = "Entre em contato com a escola para mais informações";
+    
+    if (atendimentoNumber) {
+        atendenteOptions.push({
+            id: 'atendente',
+            label: 'Falar com atendente',
+            url: `https://wa.me/${atendimentoNumber.replace(/\D/g, '')}`
+        });
+        responseText += "\n\n1 - **Falar com atendente**\n\nDigite a opção desejada👇";
+    }
+    
+    return {
+        response: responseText,
+        options: atendenteOptions,
+        isIdentified: false
+    };
+}
+
 // Lógica de consulta de Boleto
 async function processBoleto(hash, session, studentId, studentName) {
     const coursesQuery = `
@@ -944,17 +967,38 @@ async function chatHandler(req, res) {
         });
     }
 
+    // Tratamento para quando o aluno está bloqueado e oferecemos apenas a opção de atendente
+    if (session.step === 'BLOCKED_REDIRECT') {
+        if (cleanText === '1' || cleanText.includes('atendente') || cleanText.includes('atendimento') || cleanText.includes('falar') || cleanText.includes('suporte')) {
+            const config = (await ConfigService.getSchoolConfig(session.hash)) || {};
+            const number = config.atendimento_numero ? config.atendimento_numero.replace(/\D/g, '') : '';
+            const responseText = number 
+                ? `Para falar com um atendente, clique no link a seguir: https://wa.me/${number}` 
+                : `Desculpe, o número de atendimento não está configurado.`;
+            
+            session.step = 'WELCOME';
+            session.student = null;
+            const greeting = await getGreetingMessage(session.hash, null, null);
+            return res.json({
+                response: responseText,
+                options: greeting.options,
+                isIdentified: false
+            });
+        }
+        // Se digitou qualquer outra coisa, apenas resetamos para WELCOME e deixamos seguir
+        session.step = 'WELCOME';
+        session.student = null;
+    }
+
     // Real-time status check
     if (session.student) {
         const status = await getStudentStatus(session.hash, session.student.id);
         if (status === 'B') {
+            const blocked = await getBlockedResponse(session.hash);
             session.student = null;
-            session.step = 'WELCOME';
-            return res.json({
-                response: "Entre em contato com a escola para mais informações",
-                options: [],
-                isIdentified: false
-            });
+            session.step = 'BLOCKED_REDIRECT';
+            session.availableOptions = blocked.options;
+            return res.json(blocked);
         } else if (status === 'I') {
             session.student = null;
             session.step = 'WELCOME';
@@ -1209,11 +1253,11 @@ async function chatHandler(req, res) {
             if (activeOrBlocked.length === 1) {
                 const row = activeOrBlocked[0];
                 if (row.SITUACAO === 'B') {
-                    return res.json({
-                        response: 'Entre em contato com a escola para mais informações',
-                        options: [],
-                        isIdentified: false
-                    });
+                    const blocked = await getBlockedResponse(session.hash);
+                    session.student = null;
+                    session.step = 'BLOCKED_REDIRECT';
+                    session.availableOptions = blocked.options;
+                    return res.json(blocked);
                 }
 
                 session.student = { 
@@ -1306,11 +1350,11 @@ async function chatHandler(req, res) {
 
         const selected = session.students[choice - 1];
         if (selected.situacao === 'B') {
-            return res.json({
-                response: 'Entre em contato com a escola para mais informações',
-                options: [],
-                isIdentified: false
-            });
+            const blocked = await getBlockedResponse(session.hash);
+            session.student = null;
+            session.step = 'BLOCKED_REDIRECT';
+            session.availableOptions = blocked.options;
+            return res.json(blocked);
         }
 
         session.student = selected;
