@@ -143,13 +143,23 @@
                 border: none;
                 background: transparent;
             }
-            @media (max-width: 480px) {
+            @media (max-width: 768px) {
+                .dk-chat-widget-launcher {
+                    bottom: 15px !important;
+                    ${position}: 15px !important;
+                }
+                .dk-chat-widget-bubble {
+                    bottom: 85px !important;
+                    ${position}: 20px !important;
+                }
                 .dk-chat-widget-container {
-                    width: calc(100% - 40px);
-                    height: calc(100% - 60px);
-                    bottom: 95px;
-                    ${position}: 20px;
-                    border-radius: 16px;
+                    width: calc(100% - 30px) !important;
+                    max-width: 450px !important;
+                    height: auto !important;
+                    top: 15px !important;
+                    bottom: 90px !important;
+                    ${position}: 15px !important;
+                    border-radius: 16px !important;
                 }
             }
         `;

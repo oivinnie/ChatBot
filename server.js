@@ -1495,7 +1495,7 @@ app.post('/api/config', async (req, res) => {
     const { hash, portal_aluno_link, cadastro_interessados_link, validador_certificado_link, theme, emoji, show_financeiro, show_horarios, show_boletim, show_plataforma, show_conteudo, show_validador, show_interessados, atendimento_numero, widget_position, widget_text } = req.body;
     
     if (!hash) {
-        return res.status(400).json({ error: 'O hash da escola é obrigatório.' });
+        return res.status(400).json({ error: 'O id da escola é obrigatório.' });
     }
 
     try {
@@ -1537,7 +1537,7 @@ app.post('/api/config', async (req, res) => {
 app.post('/api/config/test', async (req, res) => {
     const { hash } = req.body;
     if (!hash) {
-        return res.status(400).json({ error: 'O hash da escola é obrigatório para testar conexão.' });
+        return res.status(400).json({ error: 'O id da escola é obrigatório para testar conexão.' });
     }
 
     try {
@@ -1711,7 +1711,7 @@ app.post('/api/escola/validar', async (req, res) => {
         ];
         const errorMsg = (err && err.message && customMessages.includes(err.message)) 
             ? err.message 
-            : 'Falha na conexão';
+            : 'Falha na conexão. Confira as informações preenchidas e tente novamente.';
         res.status(500).json({ error: errorMsg });
     }
 });
