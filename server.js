@@ -1686,10 +1686,10 @@ app.post('/api/escola/validar', async (req, res) => {
 
         await ConfigService.saveSchoolConfig(configData);
 
-        // Inicializa o WhatsApp para esta escola se ainda não estiver ativo
+        // Não inicializa o WhatsApp automaticamente no login; aguarda a ativação manual pelo painel config.
         const savedConfig = await ConfigService.getSchoolConfig(hash);
         if (!whatsappClients[hash]) {
-            initWhatsApp(hash, savedConfig);
+            whatsappStatuses[hash] = 'DISCONNECTED';
         }
 
         res.json({
@@ -1886,7 +1886,7 @@ async function initWhatsApp(schoolHash, schoolConfig) {
         setTimeout(async () => {
             await cleanSessionFolder(schoolHash);
             isInitializingWhatsApp[schoolHash] = false;
-            initWhatsApp(schoolHash, schoolConfig);
+            // Não reinicializa automaticamente; aguarda o usuário clicar em "Ativar"
         }, 1500);
     });
 
@@ -1935,7 +1935,15 @@ async function startWhatsAppForActiveSchools() {
         
         const activeSchools = await ConfigService.getAllSchools();
         activeSchools.forEach(school => {
-            initWhatsApp(school.hash, school);
+            // Verifica se existe pasta de sessão salva para esta escola
+            const sessionPath = path.join(__dirname, '.wwebjs_auth', `session-dk_chatbot_session_${school.hash}`);
+            if (fs.existsSync(sessionPath)) {
+                console.log(`[Startup] Sessão ativa encontrada para a escola [${school.nome_fantasia || school.hash}], iniciando WhatsApp...`);
+                initWhatsApp(school.hash, school);
+            } else {
+                console.log(`[Startup] Nenhuma sessão ativa encontrada para a escola [${school.nome_fantasia || school.hash}], aguardando ativação manual.`);
+                whatsappStatuses[school.hash] = 'DISCONNECTED';
+            }
         });
     } catch (err) {
         console.error('Erro ao inicializar WhatsApp no startup:', err);
@@ -2025,7 +2033,7 @@ app.post('/api/whatsapp/disconnect', async (req, res) => {
         await cleanSessionFolder(hash);
         whatsappStatuses[hash] = 'DISCONNECTED';
         isInitializingWhatsApp[hash] = false;
-        initWhatsApp(hash, schoolConfig);
+        // Não reinicializa automaticamente; aguarda o usuário clicar em "Ativar"
     }, 1500);
 
     res.json({ success: true, message: 'WhatsApp desconectado com sucesso!' });
