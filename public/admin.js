@@ -573,12 +573,12 @@ if (waActivateBtn) {
         showCustomModal({
             title: 'Boas Práticas e Termos de Uso',
             message: `Para garantir o bom funcionamento do seu ChatBot, atente-se às seguintes diretrizes:<br><br>
-                      1. <strong>Respostas Automáticas:</strong> O assistente responderá às mensagens recebidas de forma 100% autônoma.<br><br>Enviar mensagens manualmente não interromperá o assistente.<br><br>
+                      1. <strong>Respostas Automáticas:</strong> O assistente (bot) responderá às mensagens recebidas de forma 100% autônoma.<br>Enviar mensagens manualmente não o interromperá.<br><br>
                       2. <strong>Número Exclusivo:</strong> É altamente recomendado utilizar um chip/número exclusivo para o bot, para evitar conflito com conversas pessoais ou de atendimento humano.<br><br>
-                      3. <strong>Políticas da Meta:</strong> Caso ocorra algum tipo de banimento ou restrição ao número por parte do WhatsApp (Meta), a responsabilidade e a solicitação de suporte/desbloqueio devem ser feitas diretamente à Meta.`,
+                      3. <strong>Políticas da Meta:</strong> Caso ocorra algum tipo de banimento ou restrição ao número por parte do WhatsApp (Meta), a responsabilidade e a solicitação de suporte/desbloqueio devem ser feitas diretamente à Meta.<br>Se o seu número foi restringido recentemente, o bot pode não conseguir responder mensagens por meio dele.`,
             icon: '📢',
             isConfirm: true,
-            confirmText: 'Estou de acordo',
+            confirmText: '✅ Estou de acordo',
             cancelText: 'Cancelar',
             confirmBg: '#10b981',
             confirmBorder: '#10b981',

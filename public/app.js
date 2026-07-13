@@ -102,6 +102,8 @@ function appendMessage(sender, text, options = null, isIdentified = false, extra
                 btn.onclick = () => {
                     if (opt.url) {
                         window.open(opt.url, '_blank');
+                    } else if (opt.id === 'sair') {
+                        sendQuickMessage('Sair');
                     } else {
                         sendQuickMessage(String(idx + 1));
                     }
