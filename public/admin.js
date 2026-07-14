@@ -146,6 +146,15 @@ function formatPhone(value) {
     }
 }
 
+// Função para formatar data (AAAA-MM-DD para DD/MM/AAAA) sem problemas de fuso
+function formatDate(dateStr) {
+    if (!dateStr) return '';
+    const datePart = dateStr.split('T')[0];
+    const parts = datePart.split('-');
+    if (parts.length !== 3) return '';
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
 // Carrega as configuracoes atuais do servidor
 async function loadConfig() {
     if (!hash) return;
@@ -153,11 +162,30 @@ async function loadConfig() {
 
     try {
         const response = await fetch(`/api/config?hash=${hash}`);
+        if (response.status === 403) {
+            const data = await response.json();
+            if (data.error === 'PAYMENT_BLOCKED') {
+                configSection.style.display = 'none';
+                loginSection.style.display = 'flex';
+                applyTheme('indigo');
+                showLoginWarning(data.message || 'Mensalidade em aberto. Regularize seu chatbot acessando o Portal do Cliente.');
+                return;
+            }
+        }
         const config = await response.json();
         
         const overduePaymentBanner = document.getElementById('overduePaymentBanner');
         if (overduePaymentBanner) {
-            overduePaymentBanner.style.display = config.overdue ? 'flex' : 'none';
+            if (config.overdue) {
+                const vencFormatted = formatDate(config.vencimento);
+                const bannerText = overduePaymentBanner.querySelector('span:nth-child(2)');
+                if (bannerText) {
+                    bannerText.textContent = `Garanta que o chatbot continue funcional quitando sua mensalidade DKSoft. Vencimento: ${vencFormatted}`;
+                }
+                overduePaymentBanner.style.display = 'flex';
+            } else {
+                overduePaymentBanner.style.display = 'none';
+            }
         }
         
         if (portalAlunoLink) portalAlunoLink.value = config.portal_aluno_link || 'https://portal.dksoft.com.br/';
@@ -284,9 +312,18 @@ function setButtonsState(disabled, textTest = 'Testar Conexão', textSave = 'Sal
     saveBtn.querySelector('span').textContent = textSave;
 }
 
+// Exibe caixa vermelha com aviso no login
+function showLoginWarning(message) {
+    if (dkappInactiveWarning) {
+        const p = dkappInactiveWarning.querySelector('p');
+        if (p) p.textContent = message;
+        dkappInactiveWarning.style.display = 'block';
+    }
+}
+
 // Valida a escola na base central MySQL (Login/Entrada)
 async function validateSchool() {
-    dkappInactiveWarning.style.display = 'none';
+    if (dkappInactiveWarning) dkappInactiveWarning.style.display = 'none';
     const idVal = loginSchoolId.value.trim();
     const cnpjVal = loginSchoolCnpj.value.trim();
     
@@ -323,9 +360,10 @@ async function validateSchool() {
                     window.location.search = '?hash=' + data.hash;
                 }
             });
-        } else if (status === 403 || data.error === 'DKAPP_INACTIVE') {
-            // DKAPP Inativo - Exibir caixa vermelha com aviso e link do suporte
-            dkappInactiveWarning.style.display = 'block';
+        } else if (data.error === 'PAYMENT_BLOCKED' || status === 403 && data.error === 'PAYMENT_BLOCKED') {
+            showLoginWarning(data.message || 'Mensalidade em aberto. Regularize seu chatbot acessando o Portal do Cliente.');
+        } else if (data.error === 'DKAPP_INACTIVE' || status === 403 || data.error === 'DKAPP_INACTIVE') {
+            showLoginWarning('Entre em contato com o suporte para mais informações.');
         } else {
             showAlert('error', `Falha na validação: ${data.error}`);
         }

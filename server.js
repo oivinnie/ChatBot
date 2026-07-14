@@ -1588,6 +1588,12 @@ app.get('/api/config', async (req, res) => {
             if (school) {
                 school = await ConfigService.checkAndSyncSchoolPaymentOnDemand(school);
                 const paymentStatus = getSchoolPaymentStatus(school);
+                if (paymentStatus.blocked) {
+                    return res.status(403).json({
+                        error: 'PAYMENT_BLOCKED',
+                        message: 'Mensalidade em aberto. Regularize seu chatbot acessando o Portal do Cliente.'
+                    });
+                }
                 return res.json({
                     ...school,
                     overdue: paymentStatus.overdue,
@@ -1772,6 +1778,17 @@ app.post('/api/escola/validar', async (req, res) => {
 
         // Verifica se a escola já tem configuração salva
         const existingConfig = await ConfigService.getSchoolConfig(hash);
+
+        // Se já existe e está bloqueada por inadimplência, proíbe o login
+        if (existingConfig) {
+            const paymentStatus = getSchoolPaymentStatus(existingConfig);
+            if (paymentStatus.blocked) {
+                return res.status(403).json({
+                    error: 'PAYMENT_BLOCKED',
+                    message: 'Mensalidade em aberto. Regularize seu chatbot acessando o Portal do Cliente.'
+                });
+            }
+        }
 
         // Parse do host, port e database a partir do banco_dk do dksoft19
         let host = '127.0.0.1';
@@ -2220,7 +2237,16 @@ async function runAllSchoolsPaymentSync() {
         const schools = await ConfigService.getAllSchools();
         for (const school of schools) {
             try {
-                await ConfigService.syncSchoolPayment(school);
+                const result = await ConfigService.syncSchoolPayment(school);
+                if (result === null) {
+                    console.log(`[Payment Sync] Escola ID ${school.id_atendimento} foi removida por DKAPP inativo. Limpando conexões do WhatsApp...`);
+                    await destroyWhatsAppClient(school.hash);
+                    try {
+                        await cleanSessionFolder(school.hash);
+                    } catch (cleanErr) {
+                        console.warn(`[Payment Sync] Alerta ao limpar pasta da escola ${school.id_atendimento}:`, cleanErr.message);
+                    }
+                }
             } catch (schoolErr) {
                 console.error(`[Payment Sync] Erro ao sincronizar escola ID ${school.id_atendimento}:`, schoolErr.message);
             }

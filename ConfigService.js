@@ -373,12 +373,49 @@ async function updateSchoolPaymentInfo(idAtendimento, numeroLancamento, vencimen
     invalidateCache(idAtendimento);
 }
 
+// Remove as configurações da escola do banco central e limpa caches
+async function deleteSchoolConfig(idAtendimento) {
+    const pool = getCentralPool();
+    await pool.execute('DELETE FROM escola_configs WHERE id_atendimento = ?', [idAtendimento]);
+    invalidateCache(idAtendimento);
+}
+
+// Verifica se o DKAPP está ativo e a situação é ativa (A) para o cliente no dksoft19
+async function verifySchoolDkappStatus(idAtendimento) {
+    const dkPool = getDksoftPool();
+    const [rows] = await dkPool.execute(
+        'SELECT dkapp, situacao FROM TCLIENTES WHERE id_cliente = ?',
+        [idAtendimento]
+    );
+    if (rows.length === 0) {
+        return false; // Não localizado -> Inativo
+    }
+    const client = rows[0];
+    const isDkappActive = client.dkapp && client.dkapp.trim().toUpperCase() === 'S';
+    const isSituacaoActive = client.situacao && client.situacao.trim().toUpperCase() === 'A';
+    return isDkappActive && isSituacaoActive;
+}
+
 // Sincroniza a mensalidade de uma escola com o dksoft19
 async function syncSchoolPayment(school) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const idAtendimento = school.id_atendimento;
+    
+    // Primeiro verifica se o DKAPP continua ativo e a situação ativa no dksoft19
+    try {
+        const isDkappActive = await verifySchoolDkappStatus(idAtendimento);
+        if (!isDkappActive) {
+            console.log(`[ConfigService - Sinc] Escola ${idAtendimento} inativou o DKAPP no dksoft19. Removendo do banco do chatbot.`);
+            await deleteSchoolConfig(idAtendimento);
+            return null;
+        }
+    } catch (dkappErr) {
+        console.error(`[ConfigService - Sinc] Erro ao verificar status do DKAPP para escola ${idAtendimento}:`, dkappErr.message);
+        // Em caso de erro de conexão com o dksoft19, continuamos para não apagar a escola por falha temporária
+    }
+
     const localVenc = school.vencimento ? new Date(school.vencimento) : null;
     if (localVenc) {
         localVenc.setHours(0, 0, 0, 0);
@@ -481,5 +518,7 @@ module.exports = {
     getDksoftPool,
     updateSchoolPaymentInfo,
     syncSchoolPayment,
-    checkAndSyncSchoolPaymentOnDemand
+    checkAndSyncSchoolPaymentOnDemand,
+    deleteSchoolConfig,
+    verifySchoolDkappStatus
 };
