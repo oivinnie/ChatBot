@@ -1,4 +1,4 @@
-if (window.self !== window.top) {
+if (window.location.search.includes('iframe=true') || window.self !== window.top) {
     document.body.classList.add('iframe-mode');
 }
 

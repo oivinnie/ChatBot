@@ -48,7 +48,7 @@
         const bottom = parseInt(config.widget_bottom) || 20;
         const side = parseInt(config.widget_side) || 20;
         const width = parseInt(config.widget_width) || 400;
-        const height = parseInt(config.widget_height) || 680;
+        const height = parseInt(config.widget_height) || 750;
 
         const containerBottom = bottom + 75;
 
@@ -233,7 +233,7 @@
         
         iframe = document.createElement('iframe');
         iframe.className = 'dk-chat-widget-iframe';
-        iframe.src = `${hostUrl}/index.html?hash=${hash}`;
+        iframe.src = `${hostUrl}/index.html?hash=${hash}&iframe=true`;
         iframeContainer.appendChild(iframe);
         
         document.body.appendChild(iframeContainer);

@@ -365,13 +365,13 @@ async function validateSchool() {
         } else if (data.error === 'DKAPP_INACTIVE' || status === 403 || data.error === 'DKAPP_INACTIVE') {
             showLoginWarning('Entre em contato com o suporte para mais informações.');
         } else {
-            showAlert('error', `Erro ao validar: ${data.error}`);
+            showAlert('error', `Atenção: ${data.error}`);
         }
     } catch (err) {
         loginValidateBtn.disabled = false;
         loginValidateBtn.querySelector('span').textContent = '🚪 Acessar';
         console.error('Erro ao validar escola:', err);
-        showAlert('error', 'Erro de comunicação ao validar a escola no servidor.');
+        showAlert('error', 'Erro de comunicação ao validar a escola. Tente novamente.');
     }
 }
 
@@ -455,7 +455,7 @@ async function saveConfig() {
     } catch (err) {
         setButtonsState(false);
         console.error('Erro ao salvar configuracoes:', err);
-        showAlert('error', 'Ocorreu um erro ao tentar enviar as configurações para o servidor.');
+        showAlert('error', 'Ocorreu um erro ao tentar enviar as configurações. Tente novamente.');
     }
 }
 

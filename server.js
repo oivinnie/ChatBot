@@ -69,6 +69,10 @@ app.use((req, res, next) => {
 // Serve arquivos estáticos da pasta public
 app.use(express.static(path.join(__dirname, 'public')));
 
+app.get('/admin', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
 // Gerenciamento de sessões em memória
 const sessions = {};
 
@@ -1856,6 +1860,23 @@ app.post('/api/escola/validar', async (req, res) => {
     } catch (err) {
         console.error('Erro na validação da escola:', err);
         if (err.message === 'DKAPP_INACTIVE') {
+            try {
+                const schoolIdInt = parseInt(id_atendimento);
+                if (!isNaN(schoolIdInt)) {
+                    const schools = await ConfigService.getAllSchools();
+                    const existingSchool = schools.find(s => s.id_atendimento === schoolIdInt);
+                    if (existingSchool) {
+                        console.log(`[Validation API] Escola ID ${schoolIdInt} está inativa (DKAPP/Situação). Descomissionando e removendo do banco central...`);
+                        await destroyWhatsAppClient(existingSchool.hash);
+                        try {
+                            await cleanSessionFolder(existingSchool.hash);
+                        } catch (cleanErr) {}
+                        await ConfigService.deleteSchoolConfig(schoolIdInt);
+                    }
+                }
+            } catch (delErr) {
+                console.error('[Validation API] Erro ao remover escola inativa no login:', delErr.message);
+            }
             return res.status(403).json({ error: 'DKAPP_INACTIVE' });
         }
 
@@ -2258,11 +2279,34 @@ async function runAllSchoolsPaymentSync() {
     }
 }
 
+function scheduleNextDailySync() {
+    const now = new Date();
+    const nextSync = new Date(now);
+    nextSync.setHours(2, 0, 0, 0);
+
+    // Se já passou das 2h da manhã de hoje, agenda para amanhã
+    if (now.getTime() >= nextSync.getTime()) {
+        nextSync.setDate(nextSync.getDate() + 1);
+    }
+
+    const delay = nextSync.getTime() - now.getTime();
+    console.log(`[Payment Sync] Próxima sincronização diária agendada para: ${nextSync.toString()} (em ${Math.round(delay / 1000 / 60)} minutos)`);
+
+    setTimeout(async () => {
+        try {
+            await runAllSchoolsPaymentSync();
+        } catch (err) {
+            console.error('[Payment Sync] Erro na sincronização programada:', err.message);
+        }
+        scheduleNextDailySync();
+    }, delay);
+}
+
 function startDailyPaymentSync() {
-    // Roda uma vez no startup com um delay de 5 segundos para não atrasar o boot
+    // Roda uma vez no startup (5 segundos após iniciar)
     setTimeout(runAllSchoolsPaymentSync, 5000);
-    // Agenda para rodar a cada 24 horas
-    setInterval(runAllSchoolsPaymentSync, 24 * 60 * 60 * 1000);
+    // Programa as execuções diárias recorrentes para as 2h da manhã
+    scheduleNextDailySync();
 }
 startDailyPaymentSync();
 
