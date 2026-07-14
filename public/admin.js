@@ -361,11 +361,11 @@ async function validateSchool() {
                 }
             });
         } else if (data.error === 'PAYMENT_BLOCKED' || status === 403 && data.error === 'PAYMENT_BLOCKED') {
-            showLoginWarning(data.message || 'Mensalidade em aberto. Regularize seu chatbot acessando o Portal do Cliente.');
+            showLoginWarning(data.message || 'Regularize seu chatbot acessando o Portal do Cliente.');
         } else if (data.error === 'DKAPP_INACTIVE' || status === 403 || data.error === 'DKAPP_INACTIVE') {
             showLoginWarning('Entre em contato com o suporte para mais informações.');
         } else {
-            showAlert('error', `Falha na validação: ${data.error}`);
+            showAlert('error', `Erro ao validar: ${data.error}`);
         }
     } catch (err) {
         loginValidateBtn.disabled = false;

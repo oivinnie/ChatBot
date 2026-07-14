@@ -471,7 +471,7 @@ async function syncSchoolPayment(school) {
 }
 
 // Checagem em tempo real sob demanda na abertura do widget
-async function checkAndSyncSchoolPaymentOnDemand(school) {
+async function checkAndSyncSchoolPaymentOnDemand(school, forceSync = false) {
     if (!school) return null;
 
     const idAtendimento = school.id_atendimento;
@@ -488,7 +488,8 @@ async function checkAndSyncSchoolPaymentOnDemand(school) {
         const lastCheck = lastRealTimeCheckMap.get(idAtendimento);
         const now = Date.now();
 
-        if (lastCheck && (now - lastCheck < REALTIME_CHECK_COOLDOWN)) {
+        // Respeita o cooldown se forceSync for false
+        if (!forceSync && lastCheck && (now - lastCheck < REALTIME_CHECK_COOLDOWN)) {
             console.log(`[ConfigService - OnDemand] Pulando consulta ao dksoft19 para escola ${idAtendimento} (cooldown ativo).`);
             return school;
         }
@@ -496,7 +497,7 @@ async function checkAndSyncSchoolPaymentOnDemand(school) {
         lastRealTimeCheckMap.set(idAtendimento, now);
 
         try {
-            console.log(`[ConfigService - OnDemand] Iniciando checagem em tempo real para escola ${idAtendimento}...`);
+            console.log(`[ConfigService - OnDemand] Iniciando checagem em tempo real para escola ${idAtendimento} (forceSync: ${forceSync})...`);
             return await syncSchoolPayment(school);
         } catch (err) {
             console.error(`[ConfigService - OnDemand] Erro ao sincronizar pagamento sob demanda da escola ${idAtendimento}:`, err.message);

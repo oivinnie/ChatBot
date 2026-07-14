@@ -1586,7 +1586,7 @@ app.get('/api/config', async (req, res) => {
         if (hash) {
             let school = await ConfigService.getSchoolConfig(hash);
             if (school) {
-                school = await ConfigService.checkAndSyncSchoolPaymentOnDemand(school);
+                school = await ConfigService.checkAndSyncSchoolPaymentOnDemand(school, true);
                 const paymentStatus = getSchoolPaymentStatus(school);
                 if (paymentStatus.blocked) {
                     return res.status(403).json({
@@ -1777,10 +1777,11 @@ app.post('/api/escola/validar', async (req, res) => {
         const hash = crypto.createHash('sha256').update(schoolDetails.id_atendimento + '_' + schoolDetails.nome_fantasia + '_' + cnpj.trim()).digest('hex');
 
         // Verifica se a escola já tem configuração salva
-        const existingConfig = await ConfigService.getSchoolConfig(hash);
+        let existingConfig = await ConfigService.getSchoolConfig(hash);
 
         // Se já existe e está bloqueada por inadimplência, proíbe o login
         if (existingConfig) {
+            existingConfig = await ConfigService.checkAndSyncSchoolPaymentOnDemand(existingConfig, true);
             const paymentStatus = getSchoolPaymentStatus(existingConfig);
             if (paymentStatus.blocked) {
                 return res.status(403).json({
@@ -1865,7 +1866,7 @@ app.post('/api/escola/validar', async (req, res) => {
         ];
         const errorMsg = (err && err.message && customMessages.includes(err.message)) 
             ? err.message 
-            : 'Falha na conexão. Confira as informações preenchidas e tente novamente.';
+            : 'Confira as informações preenchidas e tente novamente.';
         res.status(500).json({ error: errorMsg });
     }
 });
