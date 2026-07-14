@@ -674,7 +674,7 @@ if (waDisconnectBtn) {
                 } catch (err) {
                     waDisconnectBtn.disabled = false;
                     console.error('Erro ao desconectar WhatsApp:', err);
-                    showCustomModal({ title: 'Erro', message: 'Falha ao desconectar o WhatsApp.', icon: '❌' });
+                    showCustomModal({ title: 'Erro', message: 'Falha ao desconectar o WhatsApp. Tente novamente.', icon: '❌' });
                 }
             }
         });
@@ -707,6 +707,41 @@ if (waRefreshBtn) {
         }, 1000);
     });
 }
+
+// Funções do Modal "Como Localizar?"
+function showHowToFindModal() {
+    const modal = document.getElementById('howToFindModal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    setTimeout(() => {
+        modal.style.opacity = '1';
+        const content = modal.querySelector('.modal-content');
+        if (content) content.style.transform = 'scale(1)';
+    }, 10);
+}
+
+function closeHowToFindModal() {
+    const modal = document.getElementById('howToFindModal');
+    if (!modal) return;
+    modal.style.opacity = '0';
+    const content = modal.querySelector('.modal-content');
+    if (content) content.style.transform = 'scale(0.9)';
+    setTimeout(() => {
+        modal.style.display = 'none';
+    }, 200);
+}
+
+// Fecha o modal ao clicar fora da área de conteúdo
+document.addEventListener('DOMContentLoaded', () => {
+    const howToFindModal = document.getElementById('howToFindModal');
+    if (howToFindModal) {
+        howToFindModal.addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) {
+                closeHowToFindModal();
+            }
+        });
+    }
+});
 
 // Inicializa na abertura da pagina
 window.onload = () => {

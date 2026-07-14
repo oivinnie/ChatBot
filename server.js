@@ -1598,11 +1598,31 @@ app.get('/api/config', async (req, res) => {
                         message: 'Mensalidade em aberto. Regularize seu chatbot acessando o Portal do Cliente.'
                     });
                 }
-                return res.json({
-                    ...school,
+                const sanitizedSchool = {
+                    id_atendimento: school.id_atendimento,
+                    hash: school.hash,
+                    cnpj: school.cnpj,
+                    nome_fantasia: school.nome_fantasia,
+                    portal_aluno_link: school.portal_aluno_link,
+                    cadastro_interessados_link: school.cadastro_interessados_link,
+                    validador_certificado_link: school.validador_certificado_link,
+                    theme: school.theme,
+                    emoji: school.emoji,
+                    show_financeiro: school.show_financeiro,
+                    show_horarios: school.show_horarios,
+                    show_boletim: school.show_boletim,
+                    show_plataforma: school.show_plataforma,
+                    show_conteudo: school.show_conteudo,
+                    show_validador: school.show_validador,
+                    show_interessados: school.show_interessados,
+                    atendimento_numero: school.atendimento_numero,
+                    widget_position: school.widget_position,
+                    widget_text: school.widget_text,
+                    vencimento: school.vencimento,
                     overdue: paymentStatus.overdue,
                     blocked: paymentStatus.blocked
-                });
+                };
+                return res.json(sanitizedSchool);
             }
         }
         // Fallback para config padrão

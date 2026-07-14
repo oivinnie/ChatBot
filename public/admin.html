@@ -45,7 +45,7 @@
             
             <form id="loginForm" onsubmit="event.preventDefault();" style="width: 50%; display: flex; flex-direction: column; gap: 12px;">
                 <div class="form-group" style="text-align: left;">
-                    <label for="loginSchoolId" style="font-size: 11px;">ID da Escola</label>
+                    <label for="loginSchoolId" style="font-size: 11px;">ID da Escola</label> <small style="cursor: pointer; color: #4f46e5; text-decoration: underline; margin-left: 6px; font-weight: 500;" onclick="showHowToFindModal()">Como Localizar?</small>
                     <input type="text" id="loginSchoolId" placeholder="Ex: 123" required style="width: 100%; box-sizing: border-box; padding: 10px 14px; font-size: 14px;">
                 </div>
 
@@ -302,6 +302,25 @@
                 </button>
             </div>
         </form>
+    </div>
+
+    <!-- Modal "Como Localizar?" -->
+    <div id="howToFindModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 10000000; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s ease;">
+        <div class="modal-content" style="background: #ffffff; padding: 28px; border-radius: 20px; max-width: 600px; width: 90%; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); transform: scale(0.9); transition: transform 0.2s ease; border: 1px solid rgba(0,0,0,0.05); position: relative; text-align: left;">
+            <button type="button" onclick="closeHowToFindModal()" style="position: absolute; top: 16px; right: 20px; background: none; border: none; font-size: 24px; cursor: pointer; color: #64748b; line-height: 1;">&times;</button>
+            <h3 style="font-size: 18px; font-weight: 700; color: #1e1b4b; margin: 0 0 14px 0; display: flex; align-items: center; gap: 8px;">
+                🔍 Como Localizar o ID da Escola?
+            </h3>
+            <p style="font-size: 14px; color: #475569; line-height: 1.6; margin: 0 0 16px 0;">
+                Abra o sistema DKSOFT, o código de cliente é exibido na barra de título do programa, como mostra o exemplo da imagem abaixo:
+            </p>
+            <div style="width: 100%; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: #f8fafc;">
+                <img src="https://dksoft.com.br/images/indicadores/identificacao-escola.jpg" alt="Exemplo ID DKSOFT" style="width: 100%; height: auto; display: block;">
+            </div>
+            <div style="margin-top: 20px; text-align: right;">
+                <button type="button" class="admin-btn btn-save" onclick="closeHowToFindModal()" style="width: auto; padding: 8px 24px; margin: 0; background: #4f46e5; border-color: #4f46e5; color: #ffffff; font-size: 14px;">Fechar</button>
+            </div>
+        </div>
     </div>
 
     <!-- Modal de Alerta / Confirmação Customizado -->
