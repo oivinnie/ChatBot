@@ -354,14 +354,14 @@ async function validateSchool() {
             localStorage.setItem('school_hash', data.hash);
             showCustomModal({
                 title: 'Sucesso',
-                message: `Escola Validada com Sucesso!\n\nID: ${data.id_atendimento}\nNome Fantasia: ${data.nome_fantasia}`,
+                message: `Escola Encontrada!\n\nID: ${data.id_atendimento}\n\nNome Fantasia: ${data.nome_fantasia}`,
                 icon: '🎉',
                 onConfirm: () => {
                     window.location.search = '?hash=' + data.hash;
                 }
             });
         } else if (data.error === 'PAYMENT_BLOCKED' || status === 403 && data.error === 'PAYMENT_BLOCKED') {
-            showLoginWarning(data.message || 'Regularize seu chatbot acessando o Portal do Cliente.');
+            showLoginWarning(data.message || 'Regularize o acesso no Portal do Cliente.');
         } else if (data.error === 'DKAPP_INACTIVE' || status === 403 || data.error === 'DKAPP_INACTIVE') {
             showLoginWarning('Entre em contato com o suporte para mais informações.');
         } else {

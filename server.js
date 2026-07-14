@@ -425,6 +425,18 @@ async function processBoleto(hash, session, studentId, studentName) {
     
     try {
         const courses = await db.execute(hash, coursesQuery, [studentId]);
+        
+        let isFormatoB = true;
+        try {
+            const pjpRows = await db.execute(hash, 'SELECT FORMATO FROM PARAMETROS_PJ');
+            if (pjpRows && pjpRows.length > 0) {
+                const formato = pjpRows[0].FORMATO ? pjpRows[0].FORMATO.toString().trim().toUpperCase() : '';
+                isFormatoB = (formato === 'B');
+            }
+        } catch (pjpErr) {
+            console.error('Erro ao consultar PARAMETROS_PJ:', pjpErr.message);
+        }
+
         const courseMap = {};
         let hasAcordoCancelamento = false;
         
@@ -496,7 +508,7 @@ async function processBoleto(hash, session, studentId, studentName) {
         const groupIds = Object.keys(groups);
         
         if (groupIds.length > 0) {
-            response = `Aqui estão os boletos pendentes para **${studentName}**:\n\n`;
+            response = `Aqui estão as parcelas pendentes para **${studentName}**:\n\n`;
             
             groupIds.forEach(gId => {
                 const group = groups[gId];
@@ -505,7 +517,10 @@ async function processBoleto(hash, session, studentId, studentName) {
                 group.items.forEach((row, index) => {
                     const vencimento = formatDate(row.VENCIMENTO);
                     const valor = formatCurrency(row.VALOR);
-                    const link = row.PJ_LINK ? row.PJ_LINK.toString().trim() : '';
+                    let link = row.PJ_LINK ? row.PJ_LINK.toString().trim() : '';
+                    if (!isFormatoB && link) {
+                        link = link.replace('formato=carne', 'formato=pixcarne');
+                    }
                     const historico = row.HISTORICO ? row.HISTORICO.toString().trim() : 'Mensalidade';
                     
                     const isRecorrente = group.course.pagRecorrente && group.course.pagRecorrente.toUpperCase() === 'S';
@@ -520,8 +535,12 @@ async function processBoleto(hash, session, studentId, studentName) {
                         response += `${index + 1} - **${historico}**\n`;
                         response += `   📅 Vencimento: ${vencimento}\n`;
                         response += `   💰 Valor: ${valor}\n`;
-                        response += `   🔗 [Clique aqui para abrir o boleto](${link})\n`;
-                        if (row.PJ_LINHA_DIGITAVEL) {
+                        if (isFormatoB) {
+                            response += `   🔗 [Clique aqui para abrir o boleto](${link})\n`;
+                        } else {
+                            response += `   🔗 [Clique aqui para pagar via PIX](${link})\n`;
+                        }
+                        if (isFormatoB && row.PJ_LINHA_DIGITAVEL) {
                             response += `   💳 Linha Digitável: \`${row.PJ_LINHA_DIGITAVEL.toString().trim()}\`\n`;
                         }
                         
@@ -560,14 +579,14 @@ async function processBoleto(hash, session, studentId, studentName) {
                 return response;
             }
         } else if (!response) {
-            return `Não encontrei nenhum boleto pendente cadastrado para **${studentName}**. 🎉\n\nEstá tudo em dia! Se precisar de algo mais, escolha outra opção ou digite **Sair**.`;
+            return `Não encontrei nenhum boleto pendente cadastrado para **${studentName}**. 🎉\n\nSe precisar de algo mais, escolha outra opção ou digite **Sair**.`;
         }
 
         response += `Se precisar de algo mais, escolha outra opção ou digite **Sair**.`;
         return response;
     } catch (err) {
         console.error('Erro ao buscar boletos:', err);
-        return `Desculpe, ocorreu um erro ao consultar os boletos no banco de dados. Por favor, tente novamente mais tarde.`;
+        return `Desculpe, ocorreu um erro ao consultar os boletos. Por favor, tente novamente mais tarde.`;
     }
 }
 
@@ -591,7 +610,7 @@ async function processHorarios(hash, session, studentId, studentName) {
     try {
         const cursos = await db.execute(hash, queryCursos, [studentId]);
         if (cursos.length === 0) {
-            return `Não encontrei nenhum curso ativo ou em andamento para **${studentName}** no momento. 🤷‍♂️\n\nSe precisar de algo mais, digite **Boleto** ou **Sair**.`;
+            return `Não encontrei nenhum curso ativo ou em andamento para **${studentName}** no momento. 🤷‍♂️\n\nSe precisar de algo mais, escolha outra opção ou digite **Sair**.`;
         }
 
         const promises = cursos.map(async (curso) => {
@@ -627,7 +646,7 @@ async function processHorarios(hash, session, studentId, studentName) {
             response += `⏰ Horários: **${sch.horarios}**\n\n`;
         });
 
-        response += `Se precisar de algo mais, digite **Boleto** ou **Sair** para consultar outro CPF.`;
+        response += `Se precisar de algo mais, escolha outra opção ou digite **Sair**.`;
         return response;
     } catch (err) {
         console.error('Erro ao buscar horários:', err);
