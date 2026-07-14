@@ -428,15 +428,46 @@ async function syncSchoolPayment(school) {
         if (!school.numero_lancamento) {
             return school;
         }
-        console.log(`[ConfigService - Sinc] Verificando se lançamento ${school.numero_lancamento} da escola ${idAtendimento} foi quitado...`);
+        console.log(`[ConfigService - Sinc] Verificando lançamento ${school.numero_lancamento} da escola ${idAtendimento}...`);
         const [rows] = await dkPool.execute(
-            "SELECT quitado FROM TCAIXA WHERE numero_lancamento = ? AND id_cliente = ?",
+            "SELECT quitado, vencimento FROM TCAIXA WHERE numero_lancamento = ? AND id_cliente = ?",
             [school.numero_lancamento, idAtendimento]
         );
 
-        if (rows.length > 0 && rows[0].quitado === 'S') {
-            console.log(`[ConfigService - Sinc] Lançamento ${school.numero_lancamento} quitado! Buscando próximo vencimento...`);
-            // Busca o próximo vencimento mais recente em aberto
+        if (rows.length > 0) {
+            const dkInvoice = rows[0];
+            if (dkInvoice.quitado === 'S') {
+                console.log(`[ConfigService - Sinc] Lançamento ${school.numero_lancamento} quitado! Buscando próximo vencimento...`);
+                // Busca o próximo vencimento mais recente em aberto
+                const [nextRows] = await dkPool.execute(
+                    "SELECT numero_lancamento, vencimento FROM TCAIXA WHERE id_cliente = ? AND quitado = 'N' ORDER BY vencimento DESC LIMIT 1",
+                    [idAtendimento]
+                );
+                if (nextRows.length > 0) {
+                    const nextVenc = nextRows[0].vencimento;
+                    const nextNum = nextRows[0].numero_lancamento;
+                    await updateSchoolPaymentInfo(idAtendimento, nextNum, nextVenc);
+                } else {
+                    await updateSchoolPaymentInfo(idAtendimento, null, null);
+                }
+                return await getSchoolConfig(idAtendimento);
+            } else {
+                // Se ainda está aberto ('N'), mas a data de vencimento foi alterada/prorrogada no dksoft19
+                const dkVencDate = dkInvoice.vencimento ? new Date(dkInvoice.vencimento) : null;
+                if (dkVencDate) {
+                    dkVencDate.setHours(0, 0, 0, 0);
+                    const localVencTime = localVenc.getTime();
+                    const dkVencTime = dkVencDate.getTime();
+                    if (localVencTime !== dkVencTime) {
+                        console.log(`[ConfigService - Sinc] Vencimento do lançamento ${school.numero_lancamento} prorrogado no dksoft19 de ${school.vencimento} para ${dkInvoice.vencimento}. Atualizando...`);
+                        await updateSchoolPaymentInfo(idAtendimento, school.numero_lancamento, dkInvoice.vencimento);
+                        return await getSchoolConfig(idAtendimento);
+                    }
+                }
+            }
+        } else {
+            // Lançamento local não localizado no dksoft19 (foi excluído/renumerado)
+            console.log(`[ConfigService - Sinc] Lançamento local ${school.numero_lancamento} não localizado no dksoft19. Buscando lançamento aberto mais recente...`);
             const [nextRows] = await dkPool.execute(
                 "SELECT numero_lancamento, vencimento FROM TCAIXA WHERE id_cliente = ? AND quitado = 'N' ORDER BY vencimento DESC LIMIT 1",
                 [idAtendimento]
