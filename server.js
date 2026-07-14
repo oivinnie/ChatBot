@@ -22,6 +22,34 @@ const { exec } = require('child_process');
 const db = require('./db');
 const ConfigService = require('./ConfigService');
 
+// Helper to calculate payment status: overdue (today > vencimento) and blocked (today > vencimento + 2 days)
+function getSchoolPaymentStatus(school) {
+    if (!school || !school.vencimento) {
+        return { overdue: false, blocked: false, blockedMessage: null };
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const venc = new Date(school.vencimento);
+    venc.setHours(0, 0, 0, 0);
+
+    // Overdue se passou do dia do vencimento
+    const overdue = today.getTime() > venc.getTime();
+
+    // Bloqueado se passou de 2 dias do vencimento
+    const blockLimit = new Date(venc);
+    blockLimit.setDate(blockLimit.getDate() + 2);
+    const blocked = today.getTime() > blockLimit.getTime();
+
+    const emoji = school.emoji || '🤖';
+    const blockedMessage = blocked 
+        ? `${emoji} Ops, estou sem conexão. Tente novamente mais tarde. Para casos urgentes, entre em contato direto com a escola.` 
+        : null;
+
+    return { overdue, blocked, blockedMessage };
+}
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -939,11 +967,27 @@ async function handleBoletimCourseSelection(hash, session) {
     }
 }
 
-// ROTA DO CHATBOT API
 async function chatHandler(req, res) {
     const { sessionId, message, hash } = req.body;
     if (!sessionId || typeof message !== 'string') {
         return res.status(400).json({ error: 'Parâmetros inválidos.' });
+    }
+
+    // Verifica se a mensalidade está atrasada/bloqueada
+    if (hash) {
+        try {
+            const school = await ConfigService.getSchoolConfig(hash);
+            const paymentStatus = getSchoolPaymentStatus(school);
+            if (paymentStatus.blocked) {
+                return res.json({
+                    response: paymentStatus.blockedMessage,
+                    options: [],
+                    isIdentified: false
+                });
+            }
+        } catch (err) {
+            console.error('Erro ao verificar pagamento no chatHandler:', err.message);
+        }
     }
 
     // Inicializa a sessão se não existir
@@ -1540,9 +1584,15 @@ app.get('/api/config', async (req, res) => {
     const { hash } = req.query;
     try {
         if (hash) {
-            const school = await ConfigService.getSchoolConfig(hash);
+            let school = await ConfigService.getSchoolConfig(hash);
             if (school) {
-                return res.json(school);
+                school = await ConfigService.checkAndSyncSchoolPaymentOnDemand(school);
+                const paymentStatus = getSchoolPaymentStatus(school);
+                return res.json({
+                    ...school,
+                    overdue: paymentStatus.overdue,
+                    blocked: paymentStatus.blocked
+                });
             }
         }
         // Fallback para config padrão
@@ -1646,7 +1696,12 @@ app.get('/api/info', async (req, res) => {
     let logo = null;
 
     try {
-        const school = hash ? await ConfigService.getSchoolConfig(hash) : null;
+        let school = hash ? await ConfigService.getSchoolConfig(hash) : null;
+
+        // Verifica se a mensalidade está em dia na abertura do widget (se necessário)
+        if (school) {
+            school = await ConfigService.checkAndSyncSchoolPaymentOnDemand(school);
+        }
 
         if (school) {
             emoji = school.emoji || '🤖';
@@ -1677,6 +1732,8 @@ app.get('/api/info', async (req, res) => {
             }
         }
 
+        const paymentStatus = getSchoolPaymentStatus(school);
+
         res.json({ 
             title, 
             emoji, 
@@ -1689,7 +1746,10 @@ app.get('/api/info', async (req, res) => {
             widget_width: 400,
             widget_height: 680,
             widget_side: 20,
-            widget_bottom: 20
+            widget_bottom: 20,
+            overdue: paymentStatus.overdue,
+            blocked: paymentStatus.blocked,
+            blockedMessage: paymentStatus.blockedMessage
         });
     } catch (err) {
         console.error('Erro no api/info:', err);
@@ -1999,6 +2059,18 @@ async function initWhatsApp(schoolHash, schoolConfig) {
             const text = msg.body ? msg.body.trim() : '';
             if (!text) return;
 
+            // Verifica se o chatbot está suspenso/bloqueado
+            try {
+                const school = await ConfigService.getSchoolConfig(schoolHash);
+                const paymentStatus = getSchoolPaymentStatus(school);
+                if (paymentStatus.blocked) {
+                    console.log(`[WhatsApp - ${schoolHash}] Mensagem de WhatsApp de ${msg.from} ignorada pois o chatbot está bloqueado por falta de pagamento.`);
+                    return;
+                }
+            } catch (payErr) {
+                console.error(`[WhatsApp - ${schoolHash}] Erro ao verificar pagamento no message_create:`, payErr.message);
+            }
+
             console.log(`[${schoolConfig.nome_fantasia || schoolHash}] Mensagem de WhatsApp de ${msg.from}: "${text}"`);
 
             const isFirstMessage = !sessions[msg.from];
@@ -2140,6 +2212,32 @@ app.post('/api/whatsapp/disconnect', async (req, res) => {
 
     res.json({ success: true, message: 'WhatsApp desconectado com sucesso!' });
 });
+
+// Rotina de Sincronização Diária de Pagamentos
+async function runAllSchoolsPaymentSync() {
+    console.log('[Payment Sync] Iniciando rotina diária de sincronização de pagamentos...');
+    try {
+        const schools = await ConfigService.getAllSchools();
+        for (const school of schools) {
+            try {
+                await ConfigService.syncSchoolPayment(school);
+            } catch (schoolErr) {
+                console.error(`[Payment Sync] Erro ao sincronizar escola ID ${school.id_atendimento}:`, schoolErr.message);
+            }
+        }
+        console.log('[Payment Sync] Rotina diária de sincronização concluída.');
+    } catch (err) {
+        console.error('[Payment Sync] Erro na rotina diária de sincronização de pagamentos:', err.message);
+    }
+}
+
+function startDailyPaymentSync() {
+    // Roda uma vez no startup com um delay de 5 segundos para não atrasar o boot
+    setTimeout(runAllSchoolsPaymentSync, 5000);
+    // Agenda para rodar a cada 24 horas
+    setInterval(runAllSchoolsPaymentSync, 24 * 60 * 60 * 1000);
+}
+startDailyPaymentSync();
 
 // Inicialização do servidor
 app.listen(PORT, () => {

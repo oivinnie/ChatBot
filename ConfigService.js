@@ -352,6 +352,124 @@ async function getAllSchools() {
     return rows;
 }
 
+// Map to throttle real-time queries to dksoft19 database (cooldown of 5 minutes)
+const lastRealTimeCheckMap = new Map();
+const REALTIME_CHECK_COOLDOWN = 1000 * 60 * 5; // 5 minutos
+
+// Atualiza as colunas de controle de pagamento no banco central
+async function updateSchoolPaymentInfo(idAtendimento, numeroLancamento, vencimento) {
+    const pool = getCentralPool();
+    let formattedVenc = null;
+    if (vencimento) {
+        const d = new Date(vencimento);
+        if (!isNaN(d.getTime())) {
+            formattedVenc = d.toISOString().split('T')[0];
+        }
+    }
+    await pool.execute(
+        'UPDATE escola_configs SET numero_lancamento = ?, vencimento = ? WHERE id_atendimento = ?',
+        [numeroLancamento, formattedVenc, idAtendimento]
+    );
+    invalidateCache(idAtendimento);
+}
+
+// Sincroniza a mensalidade de uma escola com o dksoft19
+async function syncSchoolPayment(school) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const idAtendimento = school.id_atendimento;
+    const localVenc = school.vencimento ? new Date(school.vencimento) : null;
+    if (localVenc) {
+        localVenc.setHours(0, 0, 0, 0);
+    }
+
+    const dkPool = getDksoftPool();
+
+    // Caso 1: Vencimento local no passado (atrasado)
+    if (localVenc && today.getTime() > localVenc.getTime()) {
+        if (!school.numero_lancamento) {
+            return school;
+        }
+        console.log(`[ConfigService - Sinc] Verificando se lançamento ${school.numero_lancamento} da escola ${idAtendimento} foi quitado...`);
+        const [rows] = await dkPool.execute(
+            "SELECT quitado FROM TCAIXA WHERE numero_lancamento = ? AND id_cliente = ?",
+            [school.numero_lancamento, idAtendimento]
+        );
+
+        if (rows.length > 0 && rows[0].quitado === 'S') {
+            console.log(`[ConfigService - Sinc] Lançamento ${school.numero_lancamento} quitado! Buscando próximo vencimento...`);
+            // Busca o próximo vencimento mais recente em aberto
+            const [nextRows] = await dkPool.execute(
+                "SELECT numero_lancamento, vencimento FROM TCAIXA WHERE id_cliente = ? AND quitado = 'N' ORDER BY vencimento DESC LIMIT 1",
+                [idAtendimento]
+            );
+            if (nextRows.length > 0) {
+                const nextVenc = nextRows[0].vencimento;
+                const nextNum = nextRows[0].numero_lancamento;
+                await updateSchoolPaymentInfo(idAtendimento, nextNum, nextVenc);
+            } else {
+                await updateSchoolPaymentInfo(idAtendimento, null, null);
+            }
+            return await getSchoolConfig(idAtendimento);
+        }
+    } 
+    // Caso 2: Vencimento local é NULL (não possui parcelas vencendo registradas)
+    else if (!localVenc) {
+        console.log(`[ConfigService - Sinc] Escola ${idAtendimento} sem vencimento local. Buscando se há lançamento em aberto no dksoft19...`);
+        const [rows] = await dkPool.execute(
+            "SELECT numero_lancamento, vencimento FROM TCAIXA WHERE id_cliente = ? AND quitado = 'N' ORDER BY vencimento DESC LIMIT 1",
+            [idAtendimento]
+        );
+        if (rows.length > 0) {
+            const newVenc = rows[0].vencimento;
+            const newNum = rows[0].numero_lancamento;
+            console.log(`[ConfigService - Sinc] Registrando vencimento ${newVenc} e lançamento ${newNum} para escola ${idAtendimento}...`);
+            await updateSchoolPaymentInfo(idAtendimento, newNum, newVenc);
+            return await getSchoolConfig(idAtendimento);
+        }
+    }
+
+    return school;
+}
+
+// Checagem em tempo real sob demanda na abertura do widget
+async function checkAndSyncSchoolPaymentOnDemand(school) {
+    if (!school) return null;
+
+    const idAtendimento = school.id_atendimento;
+    const localVenc = school.vencimento ? new Date(school.vencimento) : null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (localVenc) {
+        localVenc.setHours(0, 0, 0, 0);
+    }
+
+    // Só sincroniza se estiver com vencimento local no passado
+    if (localVenc && today.getTime() > localVenc.getTime()) {
+        const lastCheck = lastRealTimeCheckMap.get(idAtendimento);
+        const now = Date.now();
+
+        if (lastCheck && (now - lastCheck < REALTIME_CHECK_COOLDOWN)) {
+            console.log(`[ConfigService - OnDemand] Pulando consulta ao dksoft19 para escola ${idAtendimento} (cooldown ativo).`);
+            return school;
+        }
+
+        lastRealTimeCheckMap.set(idAtendimento, now);
+
+        try {
+            console.log(`[ConfigService - OnDemand] Iniciando checagem em tempo real para escola ${idAtendimento}...`);
+            return await syncSchoolPayment(school);
+        } catch (err) {
+            console.error(`[ConfigService - OnDemand] Erro ao sincronizar pagamento sob demanda da escola ${idAtendimento}:`, err.message);
+            return school;
+        }
+    }
+
+    return school;
+}
+
 module.exports = {
     encrypt,
     decrypt,
@@ -360,5 +478,8 @@ module.exports = {
     saveSchoolConfig,
     invalidateCache,
     getAllSchools,
-    getDksoftPool
+    getDksoftPool,
+    updateSchoolPaymentInfo,
+    syncSchoolPayment,
+    checkAndSyncSchoolPaymentOnDemand
 };

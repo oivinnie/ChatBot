@@ -65,7 +65,9 @@ CREATE TABLE `escola_configs` (
   `widget_position` varchar(20) DEFAULT 'right',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  `widget_text` varchar(20) DEFAULT 'Posso ajudar?'
+  `widget_text` varchar(20) DEFAULT 'Posso ajudar?',
+  `numero_lancamento` varchar(8) DEFAULT NULL,
+  `vencimento` date DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --

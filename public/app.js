@@ -83,10 +83,13 @@ function parseMarkdown(text) {
     return html;
 }
 
-// Adiciona uma mensagem ao log do chat
 function appendMessage(sender, text, options = null, isIdentified = false, extraButtons = null) {
     const messageDiv = document.createElement('div');
-    messageDiv.classList.add('message', sender);
+    if (sender === 'blocked-bot') {
+        messageDiv.classList.add('message', 'bot', 'blocked-bot');
+    } else {
+        messageDiv.classList.add('message', sender);
+    }
     messageDiv.innerHTML = parseMarkdown(text);
     
     // Adiciona botões interativos se for a saudação inicial ou incluir opções
@@ -258,6 +261,27 @@ function applyBotInfo(infoData) {
     }
 }
 
+function applyBlockedState(infoData) {
+    removeTypingIndicator();
+    chatLog.innerHTML = '';
+    
+    // Altera o status para "Offline" no header
+    const statusEl = document.querySelector('.header-title p');
+    if (statusEl) {
+        statusEl.textContent = 'Offline';
+        statusEl.style.color = '#ef4444'; // Vermelho para indicar offline
+    }
+    
+    // Adiciona a mensagem offline do bot sem opções ou botões
+    appendMessage('blocked-bot', infoData.blockedMessage || 'Ops, estou sem conexão. Tente novamente mais tarde. Para casos urgentes, entre em contato direto com a escola.');
+    
+    // Oculta a área de input
+    const inputArea = document.querySelector('.input-area');
+    if (inputArea) {
+        inputArea.style.display = 'none';
+    }
+}
+
 // Inicializa a conversa com a saudação inicial do chatbot
 async function initChat() {
     showTypingIndicator();
@@ -265,42 +289,58 @@ async function initChat() {
     // Tenta carregar imediatamente do cache local para evitar piscadas
     const cacheKey = `bot_info_${hash}`;
     const cachedInfo = localStorage.getItem(cacheKey);
+    let wasBlockedCached = false;
     if (cachedInfo) {
         try {
-            applyBotInfo(JSON.parse(cachedInfo));
+            const parsed = JSON.parse(cachedInfo);
+            applyBotInfo(parsed);
+            if (parsed.blocked) {
+                wasBlockedCached = true;
+                applyBlockedState(parsed);
+            }
         } catch (e) {
             console.error('Erro ao ler cache do bot info:', e);
         }
     }
     
-    // Inicia as requisições em paralelo para carregar mais rápido
-    const infoPromise = fetch(`/api/info?hash=${hash}`)
-        .then(res => res.json())
-        .then(infoData => {
-            localStorage.setItem(cacheKey, JSON.stringify(infoData));
-            applyBotInfo(infoData);
-            return infoData;
-        })
-        .catch(err => {
-            console.error('Erro ao carregar informações do bot:', err);
-            return null;
-        });
-
-    const chatPromise = fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            sessionId: sessionId,
-            message: 'menu', // Força exibição do menu de saudação inicial
-            hash: hash
-        })
-    }).then(res => res.json());
-
-    // Aguarda a resposta do chat e atualiza a tela
+    let infoData = null;
     try {
-        const data = await chatPromise;
+        const infoRes = await fetch(`/api/info?hash=${hash}`);
+        infoData = await infoRes.json();
+        localStorage.setItem(cacheKey, JSON.stringify(infoData));
+        applyBotInfo(infoData);
+
+        if (infoData.blocked) {
+            applyBlockedState(infoData);
+            return;
+        } else {
+            // Se estava bloqueado no cache mas agora está liberado, restaura os elementos
+            const inputArea = document.querySelector('.input-area');
+            if (inputArea) inputArea.style.display = 'flex';
+            const statusEl = document.querySelector('.header-title p');
+            if (statusEl) {
+                statusEl.textContent = 'Online';
+                statusEl.style.color = '';
+            }
+        }
+    } catch (err) {
+        console.error('Erro ao carregar informações do bot:', err);
+        if (wasBlockedCached) return;
+    }
+
+    try {
+        const chatRes = await fetch('/api/chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                sessionId: sessionId,
+                message: 'menu',
+                hash: hash
+            })
+        });
+        const data = await chatRes.json();
         removeTypingIndicator();
         if (data.response) {
             appendMessage('bot', data.response, data.options, data.isIdentified, data.extraButtons);

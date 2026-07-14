@@ -155,6 +155,11 @@ async function loadConfig() {
         const response = await fetch(`/api/config?hash=${hash}`);
         const config = await response.json();
         
+        const overduePaymentBanner = document.getElementById('overduePaymentBanner');
+        if (overduePaymentBanner) {
+            overduePaymentBanner.style.display = config.overdue ? 'flex' : 'none';
+        }
+        
         if (portalAlunoLink) portalAlunoLink.value = config.portal_aluno_link || 'https://portal.dksoft.com.br/';
         if (atendimentoNumero) atendimentoNumero.value = formatPhone(config.atendimento_numero || '');
         if (cadastroInteressadosLink) cadastroInteressadosLink.value = config.cadastro_interessados_link || '';
