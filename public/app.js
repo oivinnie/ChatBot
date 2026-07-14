@@ -130,7 +130,11 @@ function appendMessage(sender, text, options = null, isIdentified = false, extra
     }
     
     chatLog.appendChild(messageDiv);
-    chatLog.scrollTop = chatLog.scrollHeight;
+    if (chatLog.children.length <= 1) {
+        chatLog.scrollTop = 0;
+    } else {
+        chatLog.scrollTop = chatLog.scrollHeight;
+    }
 }
 
 // Mostra o indicador de digitação do Bot
