@@ -116,6 +116,32 @@ function invalidateCache(idOrHash) {
 async function getSchoolConfig(idOrHash) {
     if (!idOrHash) return null;
     const strKey = String(idOrHash).trim();
+    if (strKey === 'teste0' || strKey === '0') {
+        return {
+            id_atendimento: 0,
+            hash: 'teste0',
+            cnpj: '00000000000000',
+            nome_fantasia: 'DKSOFT TESTE',
+            portal_aluno_link: 'https://portal.dksoft.com.br/',
+            cadastro_interessados_link: '',
+            validador_certificado_link: 'https://suportedksoft.com.br/certificado/',
+            theme: 'indigo',
+            emoji: '🤖',
+            show_financeiro: true,
+            show_horarios: true,
+            show_boletim: true,
+            show_plataforma: true,
+            show_conteudo: true,
+            show_validador: true,
+            show_interessados: true,
+            atendimento_numero: '',
+            widget_position: 'right',
+            widget_text: 'Testar Chatbot',
+            vencimento: '2099-12-31',
+            overdue: false,
+            blocked: false
+        };
+    }
     const now = Date.now();
 
     // Verifica cache de configuração
@@ -163,6 +189,10 @@ async function getSchoolConfig(idOrHash) {
 
 // Obtém e atualiza as credenciais de conexão do banco da escola a partir do dksoft19
 async function getSchoolConnectionConfig(idOrHash) {
+    const strKey = String(idOrHash).trim();
+    if (strKey === 'teste0' || strKey === '0') {
+        return getSchoolConnectionConfig(32248);
+    }
     const config = await getSchoolConfig(idOrHash);
     if (!config) {
         throw new Error(`Configurações da escola "${idOrHash}" não encontradas no banco central.`);

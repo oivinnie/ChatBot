@@ -1396,6 +1396,9 @@ async function chatHandler(req, res) {
                 pRaw, pDigits, pCpf, pCnpj
             ];
         }
+        if (session.hash === 'teste0' || session.hash === '0') {
+            query = query.replace(/WHERE\s*\(/i, 'WHERE ID_ALUNO = 248 AND (');
+        }
 
         try {
             const results = await db.execute(session.hash, query, params);
