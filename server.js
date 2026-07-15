@@ -565,7 +565,7 @@ async function processBoleto(hash, session, studentId, studentName) {
                         response += `${index + 1} - **${historico}**\n`;
                         response += `   📅 Vencimento: ${vencimento}\n`;
                         response += `   💰 Valor: ${valor}\n`;
-                        response += `   📞 Entre em contato com a secretaria da escola\n\n`;
+                        response += `   📞 Entre em contato com a secretaria da escola para mais informações\n\n`;
                     }
                 });
             });
