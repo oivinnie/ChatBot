@@ -1086,6 +1086,46 @@ async function chatHandler(req, res) {
         session.student = null;
     }
 
+    // Tratamento para quando não há link de cadastro e oferecemos apenas falar com atendente e sair
+    if (session.step === 'CADASTRO_REDIRECT') {
+        const hasAtendente = session.availableOptions && session.availableOptions.some(opt => opt.id === 'atendente');
+        const indexSair = hasAtendente ? '2' : '1';
+        const indexAtendente = '1';
+        
+        if (hasAtendente && (cleanText === indexAtendente || cleanText.includes('atendente') || cleanText.includes('atendimento') || cleanText.includes('falar') || cleanText.includes('suporte'))) {
+            const config = (await ConfigService.getSchoolConfig(session.hash)) || {};
+            const number = config.atendimento_numero ? config.atendimento_numero.replace(/\D/g, '') : '';
+            const responseText = number 
+                ? `Para falar com um atendente, clique no link a seguir: https://wa.me/${number}` 
+                : `Desculpe, o número de atendimento não está configurado.`;
+            
+            session.step = 'WELCOME';
+            session.student = null;
+            const greeting = await getGreetingMessage(session.hash, null, null);
+            return res.json({
+                response: responseText,
+                options: greeting.options,
+                isIdentified: false
+            });
+        }
+        
+        // Se escolheu Sair (por índice correspondente ou por palavra-chave)
+        if (cleanText === indexSair || cleanText === 'sair' || cleanText === 'limpar' || cleanText === 'novo' || cleanText === 'menu') {
+            session.step = 'WELCOME';
+            session.student = null;
+            const greeting = await getGreetingMessage(session.hash, null, null);
+            return res.json({
+                response: greeting.responseText,
+                options: greeting.options,
+                isIdentified: false
+            });
+        }
+        
+        // Se digitou qualquer outra coisa, apenas resetamos para WELCOME e deixamos seguir o fluxo normal
+        session.step = 'WELCOME';
+        session.student = null;
+    }
+
     // Real-time status check
     if (session.student) {
         const status = await getStudentStatus(session.hash, session.student.id);
@@ -1242,14 +1282,47 @@ async function chatHandler(req, res) {
                 const redirectUrl = config.cadastro_interessados_link && config.cadastro_interessados_link.toString().trim() !== ''
                     ? formatUrl(config.cadastro_interessados_link.toString())
                     : null;
-                return res.json({
-                    response: redirectUrl 
-                        ? `Acessando o cadastro de interessados...` 
-                        : `Fale com um atendente da escola para realizar seu cadastro.`,
-                    options: greeting.options,
-                    isIdentified: false,
-                    redirectUrl: redirectUrl
-                });
+                if (redirectUrl) {
+                    return res.json({
+                        response: `Acessando o cadastro de interessados...`,
+                        options: greeting.options,
+                        isIdentified: false,
+                        redirectUrl: redirectUrl
+                    });
+                } else {
+                    const atendimentoNumber = config.atendimento_numero ? config.atendimento_numero.toString().trim() : '';
+                    const cadastroOptions = [];
+                    let responseText = `Fale com um atendente da escola para realizar seu cadastro.`;
+                    
+                    let optIndex = 1;
+                    if (atendimentoNumber) {
+                        cadastroOptions.push({
+                            id: 'atendente',
+                            label: 'Falar com atendente',
+                            url: `https://wa.me/${atendimentoNumber.replace(/\D/g, '')}`
+                        });
+                        responseText += `\n\n${optIndex} - **Falar com atendente**`;
+                        optIndex++;
+                    }
+                    
+                    cadastroOptions.push({
+                        id: 'sair',
+                        label: 'Sair',
+                        url: null
+                    });
+                    responseText += `\n${optIndex} - **Sair**`;
+                    responseText += "\n\nDigite a opção desejada👇";
+                    
+                    session.step = 'CADASTRO_REDIRECT';
+                    session.availableOptions = cadastroOptions;
+                    
+                    return res.json({
+                        response: responseText,
+                        options: cadastroOptions,
+                        isIdentified: false,
+                        redirectUrl: null
+                    });
+                }
             } else if (selectedOption.id === 'atendente') {
                 const config = (await ConfigService.getSchoolConfig(session.hash)) || {};
                 const number = config.atendimento_numero ? config.atendimento_numero.replace(/\D/g, '') : '';
@@ -1608,8 +1681,10 @@ app.get('/api/config', async (req, res) => {
     try {
         if (hash) {
             let school = await ConfigService.getSchoolConfig(hash);
-            if (school) {
-                school = await ConfigService.checkAndSyncSchoolPaymentOnDemand(school, true);
+            if (!school) {
+                return res.status(404).json({ error: 'SCHOOL_NOT_FOUND', message: 'Escola não encontrada.' });
+            }
+            school = await ConfigService.checkAndSyncSchoolPaymentOnDemand(school, true);
                 const paymentStatus = getSchoolPaymentStatus(school);
                 if (paymentStatus.blocked) {
                     return res.status(403).json({
@@ -1642,7 +1717,6 @@ app.get('/api/config', async (req, res) => {
                     blocked: paymentStatus.blocked
                 };
                 return res.json(sanitizedSchool);
-            }
         }
         // Fallback para config padrão
         res.json({
@@ -1746,6 +1820,9 @@ app.get('/api/info', async (req, res) => {
 
     try {
         let school = hash ? await ConfigService.getSchoolConfig(hash) : null;
+        if (hash && !school) {
+            return res.status(404).json({ error: 'SCHOOL_NOT_FOUND', message: 'Escola não encontrada.' });
+        }
 
         // Verifica se a mensalidade está em dia na abertura do widget (se necessário)
         if (school) {

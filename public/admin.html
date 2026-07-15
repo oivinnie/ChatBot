@@ -49,12 +49,12 @@
 					<label for="loginSchoolId" style="font-size: 11px;">ID da Escola</label>
 					<small style="cursor: pointer; color: #4f46e5; text-decoration: underline; font-weight: 500;" onclick="showHowToFindModal()">Como Localizar?</small>
 				</div>
-				<input type="text" id="loginSchoolId" placeholder="Ex: 123" required style="width: 100%; box-sizing: border-box; padding: 10px 14px; font-size: 14px;">
+				<input type="text" id="loginSchoolId" placeholder="Ex: 123" required maxlength="6" style="width: 100%; box-sizing: border-box; padding: 10px 14px; font-size: 14px;">
 			</div>
 
 			<div class="form-group" style="text-align: left;">
 				<label for="loginSchoolCnpj" style="font-size: 11px;">CNPJ da Escola</label>
-				<input type="text" id="loginSchoolCnpj" placeholder="Ex: 00.000.000/0000-00" required style="width: 100%; box-sizing: border-box; padding: 10px 14px; font-size: 14px;">
+				<input type="text" id="loginSchoolCnpj" placeholder="Ex: 00.000.000/0000-00" required maxlength="14" style="width: 100%; box-sizing: border-box; padding: 10px 14px; font-size: 14px;">
 			</div>
 
 			<button type="button" id="loginValidateBtn" class="admin-btn btn-save" style="width: 100%; padding: 10px; margin: 8px 0 0 0; font-size: 14px;">
@@ -321,6 +321,9 @@
             <div style="width: 100%; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: #f8fafc;">
                 <img src="https://dksoft.com.br/images/indicadores/identificacao-escola.jpg" alt="Exemplo ID DKSOFT" style="width: 60%; height: auto; display: block; margin: 0 auto;">
             </div>
+			<p style="font-size: 14px; color: #475569; line-height: 1.6; margin: 0 0 16px 0;">
+                O ID da escola possui 6 caracteres no máximo (somente números).
+            </p>
             <div style="margin-top: 20px; text-align: right;">
                 <button type="button" class="admin-btn btn-save" onclick="closeHowToFindModal()" style="width: auto; padding: 8px 24px; margin: 0; background: #4f46e5; border-color: #4f46e5; color: #ffffff; font-size: 14px;">Fechar</button>
             </div>

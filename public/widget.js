@@ -313,6 +313,16 @@
         // Faz a requisição para obter configurações atualizadas
         try {
             const res = await fetch(`${hostUrl}/api/info?hash=${hash}`);
+            if (res.status === 404) {
+                localStorage.removeItem(cacheKey);
+                if (launcher) launcher.remove();
+                if (bubble) bubble.remove();
+                if (iframeContainer) iframeContainer.remove();
+                hideThrobber();
+                return;
+            }
+            if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+            
             const newConfig = await res.json();
             localStorage.setItem(cacheKey, JSON.stringify(newConfig));
             
