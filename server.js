@@ -1397,7 +1397,7 @@ async function chatHandler(req, res) {
             ];
         }
         if (session.hash === 'teste0' || session.hash === '0') {
-            query = query.replace(/WHERE\s*\(/i, 'WHERE ID_ALUNO = 248 AND (');
+            query = query.replace(/WHERE\s*\(/i, 'WHERE ID_ALUNO = 1254 AND (');
         }
 
         try {
