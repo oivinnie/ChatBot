@@ -1019,8 +1019,41 @@ async function chatHandler(req, res) {
         return res.status(400).json({ error: 'Parâmetros inválidos.' });
     }
 
-    // Verifica se a mensalidade está atrasada/bloqueada
-    if (hash) {
+    // Evita processamento concorrente para a mesma sessão (corrida de mensagens no WhatsApp)
+    if (sessions[sessionId] && sessions[sessionId].isProcessing) {
+        console.log(`[Session Lock] Ignorando mensagem concorrente para a sessão ${sessionId}: "${message}"`);
+        return res.json({
+            response: null,
+            options: [],
+            isIdentified: false,
+            ignored: true
+        });
+    }
+
+    // Inicializa a sessão se não existir
+    if (!sessions[sessionId]) {
+        sessions[sessionId] = {
+            step: 'WELCOME',
+            intent: null,
+            students: [],
+            student: null,
+            hash: hash || null
+        };
+    }
+
+    const session = sessions[sessionId];
+    session.isProcessing = true;
+
+    // Sobrescreve res.json para liberar a trava de processamento ao responder
+    const originalJson = res.json;
+    res.json = function(data) {
+        session.isProcessing = false;
+        return originalJson.apply(this, arguments);
+    };
+
+    try {
+        // Verifica se a mensalidade está atrasada/bloqueada
+        if (hash) {
         try {
             const school = await ConfigService.getSchoolConfig(hash);
             const paymentStatus = getSchoolPaymentStatus(school);
@@ -1871,6 +1904,15 @@ async function chatHandler(req, res) {
             });
         }
     }
+    } catch (err) {
+        console.error('Erro grave no processamento do chatHandler:', err);
+        if (sessions[sessionId]) {
+            sessions[sessionId].isProcessing = false;
+        }
+        try {
+            return res.status(500).json({ error: 'Erro interno ao processar mensagem.' });
+        } catch (resErr) {}
+    }
 }
 
 app.post('/api/chat', chatHandler);
@@ -1930,7 +1972,13 @@ app.get('/api/admin/franquias', requireAdminAuth, async (req, res) => {
     try {
         const pool = ConfigService.getCentralPool();
         const [rows] = await pool.execute(`
-            SELECT f.id, f.nome, f.dia_vencimento, f.created_at, COUNT(e.id_atendimento) AS total_escolas
+            SELECT 
+                f.id, 
+                f.nome, 
+                f.dia_vencimento, 
+                f.created_at, 
+                COUNT(e.id_atendimento) AS total_escolas,
+                GROUP_CONCAT(CONCAT(e.id_atendimento, ' - ', e.nome_fantasia) SEPARATOR '\n') AS lista_escolas
             FROM franquias f
             LEFT JOIN escola_configs e ON e.franquia_id = f.id
             GROUP BY f.id, f.nome, f.dia_vencimento, f.created_at
@@ -2615,7 +2663,7 @@ async function initWhatsApp(schoolHash, schoolConfig) {
                     await msg.reply(result.response);
                     await chat.clearState();
                 } catch (chatErr) {
-                    console.error(`[${schoolConfig.nome_fantasia || schoolHash}] Erro ao enviar resposta com simulação typing:`, chatErr);
+                    console.warn(`[${schoolConfig.nome_fantasia || schoolHash}] Aviso: Simulação de digitação indisponível (${chatErr.message || chatErr})`);
                     try {
                         await msg.reply(result.response);
                     } catch (replyErr) {

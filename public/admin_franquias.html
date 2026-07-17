@@ -333,6 +333,20 @@
                 <h2 style="font-size: 18px; font-weight: 700; margin-bottom: 8px; color: var(--text-primary);">Associação de Escolas</h2>
                 <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 20px;">Selecione a franquia correspondente para cada unidade escolar cadastrada.</p>
                 
+                <!-- Barra de Pesquisa e Filtros -->
+                <div style="display: flex; gap: 12px; margin-bottom: 20px;">
+                    <div style="flex: 2;">
+                        <input type="text" id="schoolSearchInput" class="form-input" placeholder="Buscar por ID ou Nome da Escola..." oninput="handleSchoolSearch(this.value)">
+                    </div>
+                    <div style="flex: 1; min-width: 150px;">
+                        <select id="schoolFilterSelect" class="admin-select" onchange="handleSchoolFilter(this.value)">
+                            <option value="all">Todas as Escolas</option>
+                            <option value="franchise">Com Franquia</option>
+                            <option value="independent">Sem Franquia (Indep.)</option>
+                        </select>
+                    </div>
+                </div>
+
                 <div style="overflow-x: auto;">
                     <table>
                         <thead>
@@ -357,6 +371,9 @@
     <script>
         let adminToken = localStorage.getItem('franchise_admin_token') || '';
         let franchises = [];
+        let allSchools = [];
+        let schoolSearchQuery = '';
+        let schoolFilterMode = 'all'; // 'all', 'franchise', 'independent'
 
         // Inicialização
         document.addEventListener('DOMContentLoaded', () => {
@@ -467,7 +484,9 @@
                     <td>${f.id}</td>
                     <td><strong>${escapeHtml(f.nome)}</strong></td>
                     <td style="text-align: center; font-weight: 600; color: #4f46e5;">${f.dia_vencimento || '-'}</td>
-                    <td style="text-align: center;">${f.total_escolas}</td>
+                    <td style="text-align: center; cursor: help;" title="${escapeHtml(f.lista_escolas || 'Nenhuma escola vinculada')}">
+                        <span style="border-bottom: 1px dotted var(--text-secondary); font-weight: 600;">${f.total_escolas}</span>
+                    </td>
                     <td style="text-align: center;">
                         <button class="btn-action btn-edit" onclick="editFranchise(${f.id}, '${escapeQuote(f.nome)}', ${f.dia_vencimento || 'null'})">Editar</button>
                         <button class="btn-action btn-delete" onclick="deleteFranchise(${f.id})">Excluir</button>
@@ -489,11 +508,44 @@
                     throw new Error(data.message || 'Erro no servidor');
                 }
                 
-                renderSchools(data);
+                allSchools = data;
+                filterAndRenderSchools();
             } catch (err) {
                 console.error(err);
                 showToast(`Erro ao carregar escolas: ${err.message}`, true);
             }
+        }
+
+        function filterAndRenderSchools() {
+            let filtered = allSchools;
+
+            // Filtro por busca de texto (ID ou Nome)
+            if (schoolSearchQuery) {
+                const query = schoolSearchQuery.toLowerCase().trim();
+                filtered = filtered.filter(s => 
+                    String(s.id_atendimento).includes(query) || 
+                    String(s.nome_fantasia).toLowerCase().includes(query)
+                );
+            }
+
+            // Filtro por tipo de associação
+            if (schoolFilterMode === 'franchise') {
+                filtered = filtered.filter(s => s.franquia_id !== null && s.franquia_id !== '');
+            } else if (schoolFilterMode === 'independent') {
+                filtered = filtered.filter(s => s.franquia_id === null || s.franquia_id === '');
+            }
+
+            renderSchools(filtered);
+        }
+
+        function handleSchoolSearch(val) {
+            schoolSearchQuery = val;
+            filterAndRenderSchools();
+        }
+
+        function handleSchoolFilter(val) {
+            schoolFilterMode = val;
+            filterAndRenderSchools();
         }
 
         function renderSchools(schools) {
@@ -501,7 +553,7 @@
             body.innerHTML = '';
 
             if (schools.length === 0) {
-                body.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-secondary);">Nenhuma escola cadastrada no banco central.</td></tr>`;
+                body.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-secondary);">Nenhuma escola corresponde aos filtros.</td></tr>`;
                 return;
             }
 
@@ -619,7 +671,14 @@
 
                 if (response.ok) {
                     showToast('Associação de escola atualizada!');
-                    loadFranchises(); // Recarrega para atualizar a contagem de escolas nas franquias
+                    const fid = franquia_id ? parseInt(franquia_id) : null;
+                    // Atualiza localmente no array
+                    const school = allSchools.find(s => s.id_atendimento === id_atendimento);
+                    if (school) {
+                        school.franquia_id = fid;
+                    }
+                    filterAndRenderSchools();
+                    loadFranchises(); // Recarrega as franquias para atualizar a contagem e tooltips
                 } else {
                     showToast('Erro ao atualizar associação.', true);
                 }
