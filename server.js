@@ -22,16 +22,33 @@ const { exec } = require('child_process');
 const db = require('./db');
 const ConfigService = require('./ConfigService');
 
-// Helper to calculate payment status: overdue (today > vencimento) and blocked (today > vencimento + 2 days)
+// Helper to calculate payment status: overdue (hoje > vencimento) and blocked (hoje > vencimento + 2 dias)
 function getSchoolPaymentStatus(school) {
-    if (!school || !school.vencimento) {
+    if (!school) {
+        return { overdue: false, blocked: false, blockedMessage: null };
+    }
+
+    // Se a franquia estiver bloqueada por alguma unidade atrasada
+    if (school.franchise_blocked) {
+        const emoji = school.emoji || '🤖';
+        return {
+            overdue: true,
+            blocked: true,
+            blockedMessage: `${emoji} Ops, estou sem conexão. Tente novamente mais tarde. Para casos urgentes, entre em contato direto com a escola.`
+        };
+    }
+
+    if (!school.vencimento) {
         return { overdue: false, blocked: false, blockedMessage: null };
     }
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const venc = new Date(school.vencimento);
+    let venc = new Date(school.vencimento);
+    if (school.dia_vencimento_franquia) {
+        venc.setDate(school.dia_vencimento_franquia);
+    }
     venc.setHours(0, 0, 0, 0);
 
     // Overdue se passou do dia do vencimento
@@ -341,15 +358,20 @@ async function getGreetingMessage(hash, studentId = null, studentName = null) {
         response = `Olá **${studentName}**! Fico feliz em falar com você novamente. ${emoji}\n\nComo posso te ajudar hoje?\n\n`;
     } else {
         let nomeFantasia = 'DKSOFT';
-        try {
-            const result = await db.execute(hash, 'SELECT FIRST 1 NOME_FANTASIA FROM EMPRESA');
-            if (result && result.length > 0 && result[0].NOME_FANTASIA) {
-                nomeFantasia = result[0].NOME_FANTASIA.toString().trim();
+        if (config.nome_franquia) {
+            nomeFantasia = config.nome_franquia;
+            response = `${emoji} Olá! Seja bem-vindo à **${nomeFantasia}**\n\nComo posso te ajudar hoje?\n\n`;
+        } else {
+            try {
+                const result = await db.execute(hash, 'SELECT FIRST 1 NOME_FANTASIA FROM EMPRESA');
+                if (result && result.length > 0 && result[0].NOME_FANTASIA) {
+                    nomeFantasia = result[0].NOME_FANTASIA.toString().trim();
+                }
+            } catch (err) {
+                console.error('Erro ao buscar NOME_FANTASIA da EMPRESA:', err.message);
             }
-        } catch (err) {
-            console.error('Erro ao buscar NOME_FANTASIA da EMPRESA:', err.message);
+            response = `${emoji} Olá! Seja bem-vindo à Instituição **${nomeFantasia}**\n\nComo posso te ajudar hoje?\n\n`;
         }
-        response = `${emoji} Olá! Seja bem-vindo à Instituição **${nomeFantasia}**\n\nComo posso te ajudar hoje?\n\n`;
     }
 
     options.forEach((opt, idx) => {
@@ -1032,6 +1054,9 @@ async function chatHandler(req, res) {
         session.students = [];
         session.step = 'WELCOME';
         session.intent = null;
+        delete session.targetSchoolHash;
+        delete session.matchingStudents;
+        delete session.matchingSchools;
     }
 
     const text = message.trim();
@@ -1043,6 +1068,9 @@ async function chatHandler(req, res) {
         session.intent = null;
         session.students = [];
         session.student = null;
+        delete session.targetSchoolHash;
+        delete session.matchingStudents;
+        delete session.matchingSchools;
         const greeting = await getGreetingMessage(session.hash);
         return res.json({ 
             response: greeting.responseText,
@@ -1133,9 +1161,10 @@ async function chatHandler(req, res) {
 
     // Real-time status check
     if (session.student) {
-        const status = await getStudentStatus(session.hash, session.student.id);
+        const targetHash = session.targetSchoolHash || session.hash;
+        const status = await getStudentStatus(targetHash, session.student.id);
         if (status === 'B') {
-            const blocked = await getBlockedResponse(session.hash);
+            const blocked = await getBlockedResponse(targetHash);
             session.student = null;
             session.step = 'BLOCKED_REDIRECT';
             session.availableOptions = blocked.options;
@@ -1143,6 +1172,7 @@ async function chatHandler(req, res) {
         } else if (status === 'I') {
             session.student = null;
             session.step = 'WELCOME';
+            delete session.targetSchoolHash;
             return res.json({
                 response: "Não localizei o cadastro",
                 options: [],
@@ -1153,7 +1183,8 @@ async function chatHandler(req, res) {
 
     // Fluxo de decisão com base nos estados
     if (session.step === 'WELCOME') {
-        const options = await getAvailableOptions(session.hash, session.student ? session.student.id : null);
+        const targetHash = session.targetSchoolHash || session.hash;
+        const options = await getAvailableOptions(targetHash, session.student ? session.student.id : null);
         session.availableOptions = options;
 
         let selectedOption = null;
@@ -1192,8 +1223,8 @@ async function chatHandler(req, res) {
             if (selectedOption.id === 'financeiro') {
                 session.intent = 'boleto';
                 if (session.student) {
-                    const responseText = await processBoleto(session.hash, session, session.student.id, session.student.nome);
-                    const greeting = await getGreetingMessage(session.hash, session.student.id, session.student.nome);
+                    const responseText = await processBoleto(targetHash, session, session.student.id, session.student.nome);
+                    const greeting = await getGreetingMessage(targetHash, session.student.id, session.student.nome);
                     return res.json({ 
                         response: responseText,
                         options: greeting.options,
@@ -1210,8 +1241,8 @@ async function chatHandler(req, res) {
             } else if (selectedOption.id === 'horarios') {
                 session.intent = 'horarios';
                 if (session.student) {
-                    const responseText = await processHorarios(session.hash, session, session.student.id, session.student.nome);
-                    const greeting = await getGreetingMessage(session.hash, session.student.id, session.student.nome);
+                    const responseText = await processHorarios(targetHash, session, session.student.id, session.student.nome);
+                    const greeting = await getGreetingMessage(targetHash, session.student.id, session.student.nome);
                     return res.json({ 
                         response: responseText,
                         options: greeting.options,
@@ -1228,7 +1259,7 @@ async function chatHandler(req, res) {
             } else if (selectedOption.id === 'boletim') {
                 session.intent = 'boletim';
                 if (session.student) {
-                    return res.json(await handleBoletimCourseSelection(session.hash, session));
+                    return res.json(await handleBoletimCourseSelection(targetHash, session));
                 } else {
                     session.step = 'AWAITING_IDENTIFICATION';
                     return res.json({ 
@@ -1240,8 +1271,8 @@ async function chatHandler(req, res) {
             } else if (selectedOption.id === 'plataforma') {
                 session.intent = 'plataforma';
                 if (session.student) {
-                    const responseText = await processPlataforma(session.hash, session, session.student.id, session.student.nome);
-                    const greeting = await getGreetingMessage(session.hash, session.student.id, session.student.nome);
+                    const responseText = await processPlataforma(targetHash, session, session.student.id, session.student.nome);
+                    const greeting = await getGreetingMessage(targetHash, session.student.id, session.student.nome);
                     return res.json({ 
                         response: responseText,
                         options: greeting.options,
@@ -1258,8 +1289,8 @@ async function chatHandler(req, res) {
             } else if (selectedOption.id === 'conteudo') {
                 session.intent = 'conteudo';
                 if (session.student) {
-                    const responseText = await processConteudo(session.hash, session, session.student.id, session.student.nome);
-                    const greeting = await getGreetingMessage(session.hash, session.student.id, session.student.nome);
+                    const responseText = await processConteudo(targetHash, session, session.student.id, session.student.nome);
+                    const greeting = await getGreetingMessage(targetHash, session.student.id, session.student.nome);
                     return res.json({ 
                         response: responseText,
                         options: greeting.options,
@@ -1408,16 +1439,34 @@ async function chatHandler(req, res) {
         }
 
         try {
-            const results = await db.execute(session.hash, query, params);
+            // Busca conexões da franquia ou apenas a atual se for independente
+            const schoolsToSearch = await ConfigService.getFranchiseSchools(session.hash);
+            
+            const searchPromises = schoolsToSearch.map(async (school) => {
+                try {
+                    const results = await db.execute(school.hash, query, params);
+                    return results.map(row => ({
+                        ...row,
+                        schoolHash: school.hash,
+                        schoolName: school.nome_fantasia
+                    }));
+                } catch (err) {
+                    console.error(`Erro ao consultar base da escola ${school.nome_fantasia}:`, err.message);
+                    return [];
+                }
+            });
 
-            const cleanedResults = results.map(row => {
+            const allResultsNested = await Promise.all(searchPromises);
+            const allResults = allResultsNested.flat();
+
+            const cleanedResults = allResults.map(row => {
                 row.SITUACAO = row.SITUACAO ? row.SITUACAO.toString().trim() : '';
                 return row;
             });
 
             const activeOrBlocked = cleanedResults.filter(row => row.SITUACAO !== 'I');
 
-            if (results.length > 0 && activeOrBlocked.length === 0) {
+            if (allResults.length > 0 && activeOrBlocked.length === 0) {
                 return res.json({ 
                     response: 'Não localizei o cadastro',
                     options: [],
@@ -1433,53 +1482,208 @@ async function chatHandler(req, res) {
                 });
             }
 
-            if (activeOrBlocked.length === 1) {
-                const row = activeOrBlocked[0];
-                if (row.SITUACAO === 'B') {
-                    const blocked = await getBlockedResponse(session.hash);
-                    session.student = null;
-                    session.step = 'BLOCKED_REDIRECT';
-                    session.availableOptions = blocked.options;
-                    return res.json(blocked);
+            const uniqueSchoolHashes = [...new Set(activeOrBlocked.map(row => row.schoolHash))];
+
+            // Caso 1: Encontrado em apenas uma única escola/unidade
+            if (uniqueSchoolHashes.length === 1) {
+                session.targetSchoolHash = uniqueSchoolHashes[0];
+                const schoolMatches = activeOrBlocked.filter(row => row.schoolHash === session.targetSchoolHash);
+
+                if (schoolMatches.length === 1) {
+                    const row = schoolMatches[0];
+                    if (row.SITUACAO === 'B') {
+                        const blocked = await getBlockedResponse(session.targetSchoolHash);
+                        session.student = null;
+                        session.step = 'BLOCKED_REDIRECT';
+                        session.availableOptions = blocked.options;
+                        return res.json(blocked);
+                    }
+
+                    session.student = { 
+                        id: row.ID_ALUNO, 
+                        nome: row.NOME.toString().trim(),
+                        email: row.EMAIL ? row.EMAIL.toString().trim() : '',
+                        dataNascimento: row.DATA_NASCIMENTO ? row.DATA_NASCIMENTO : null,
+                        omEadId: row.OM_EAD_ID ? row.OM_EAD_ID.toString().trim() : '',
+                        matricula: row.MATRICULA ? row.MATRICULA.toString().trim() : '',
+                        situacao: row.SITUACAO
+                    };
+                    await fillStudentSessionData(session.targetSchoolHash, session);
+
+                    const targetHash = session.targetSchoolHash;
+                    if (session.intent === 'boletim') {
+                        return res.json(await handleBoletimCourseSelection(targetHash, session));
+                    }
+
+                    session.step = 'WELCOME';
+                    
+                    let responseText = '';
+                    if (session.intent === 'boleto') {
+                        responseText = await processBoleto(targetHash, session, session.student.id, session.student.nome);
+                    } else if (session.intent === 'horarios') {
+                        responseText = await processHorarios(targetHash, session, session.student.id, session.student.nome);
+                    } else if (session.intent === 'conteudo') {
+                        responseText = await processConteudo(targetHash, session, session.student.id, session.student.nome);
+                    } else if (session.intent === 'plataforma') {
+                        responseText = await processPlataforma(targetHash, session, session.student.id, session.student.nome);
+                    }
+
+                    const greeting = await getGreetingMessage(targetHash, session.student.id, session.student.nome);
+                    return res.json({ 
+                        response: responseText,
+                        options: greeting.options,
+                        isIdentified: true
+                    });
+                } else {
+                    // Múltiplos alunos (irmãos) na mesma escola
+                    session.students = schoolMatches.map(row => ({ 
+                        id: row.ID_ALUNO, 
+                        nome: row.NOME.toString().trim(),
+                        email: row.EMAIL ? row.EMAIL.toString().trim() : '',
+                        dataNascimento: row.DATA_NASCIMENTO ? row.DATA_NASCIMENTO : null,
+                        omEadId: row.OM_EAD_ID ? row.OM_EAD_ID.toString().trim() : '',
+                        matricula: row.MATRICULA ? row.MATRICULA.toString().trim() : '',
+                        situacao: row.SITUACAO
+                    }));
+                    session.step = 'AWAITING_STUDENT_SELECTION';
+
+                    let listResponse = 'Encontrei mais de um aluno associado a esses dados. Por favor, escolha qual aluno você deseja consultar digitando o número correspondente:\n\n';
+                    session.students.forEach((s, idx) => {
+                        listResponse += `${idx + 1} - **${s.nome}**\n`;
+                    });
+                    listResponse += '\nDigite apenas o número da opção (ex: "1" ou "2").';
+
+                    const studentOptions = session.students.map((s, idx) => ({
+                        id: `student_${s.id}`,
+                        label: s.nome
+                    }));
+
+                    return res.json({ 
+                        response: listResponse,
+                        options: studentOptions,
+                        isIdentified: false
+                    });
                 }
-
-                session.student = { 
-                    id: row.ID_ALUNO, 
-                    nome: row.NOME.toString().trim(),
-                    email: row.EMAIL ? row.EMAIL.toString().trim() : '',
-                    dataNascimento: row.DATA_NASCIMENTO ? row.DATA_NASCIMENTO : null,
-                    omEadId: row.OM_EAD_ID ? row.OM_EAD_ID.toString().trim() : '',
-                    matricula: row.MATRICULA ? row.MATRICULA.toString().trim() : '',
-                    situacao: row.SITUACAO
-                };
-                await fillStudentSessionData(session.hash, session);
-
-                if (session.intent === 'boletim') {
-                    return res.json(await handleBoletimCourseSelection(session.hash, session));
-                }
-
-                session.step = 'WELCOME';
+            } else {
+                // Caso 2: Encontrado em múltiplas escolas da franquia
+                session.matchingStudents = activeOrBlocked;
                 
-                let responseText = '';
-                if (session.intent === 'boleto') {
-                    responseText = await processBoleto(session.hash, session, session.student.id, session.student.nome);
-                } else if (session.intent === 'horarios') {
-                    responseText = await processHorarios(session.hash, session, session.student.id, session.student.nome);
-                } else if (session.intent === 'conteudo') {
-                    responseText = await processConteudo(session.hash, session, session.student.id, session.student.nome);
-                } else if (session.intent === 'plataforma') {
-                    responseText = await processPlataforma(session.hash, session, session.student.id, session.student.nome);
+                // Mapeia escolas únicas encontradas
+                const uniqueSchools = [];
+                const seenHashes = new Set();
+                for (const match of activeOrBlocked) {
+                    if (!seenHashes.has(match.schoolHash)) {
+                        seenHashes.add(match.schoolHash);
+                        uniqueSchools.push({
+                            hash: match.schoolHash,
+                            name: match.schoolName
+                        });
+                    }
                 }
+                session.matchingSchools = uniqueSchools;
+                session.step = 'AWAITING_UNIT_SELECTION';
 
-                const greeting = await getGreetingMessage(session.hash, session.student.id, session.student.nome);
+                let listResponse = 'Identifiquei seu cadastro em mais de uma unidade. Por favor, escolha qual delas você deseja acessar digitando o número correspondente:\n\n';
+                uniqueSchools.forEach((s, idx) => {
+                    listResponse += `${idx + 1} - **${s.name}**\n`;
+                });
+                listResponse += '\nDigite apenas o número da opção (ex: "1" ou "2").';
+
+                const unitOptions = uniqueSchools.map((s, idx) => ({
+                    id: `school_${s.hash}`,
+                    label: s.name,
+                    value: String(idx + 1)
+                }));
+
                 return res.json({ 
-                    response: responseText,
-                    options: greeting.options,
-                    isIdentified: true
+                    response: listResponse,
+                    options: unitOptions,
+                    isIdentified: false
                 });
             }
 
-            session.students = activeOrBlocked.map(row => ({ 
+        } catch (err) {
+            console.error('Erro ao consultar bancos:', err);
+            return res.json({ 
+                response: 'Ops, estou com dificuldade para me conectar 😕.',
+                options: [],
+                isIdentified: false
+            });
+        }
+    }
+
+    if (session.step === 'AWAITING_UNIT_SELECTION') {
+        const choice = parseInt(text);
+        if (isNaN(choice) || choice < 1 || choice > session.matchingSchools.length) {
+            const unitOptions = session.matchingSchools.map((s, idx) => ({
+                id: `school_${s.hash}`,
+                label: s.name,
+                value: String(idx + 1)
+            }));
+            return res.json({ 
+                response: `Opção inválida. Por favor, escolha um número de 1 a ${session.matchingSchools.length} correspondente à unidade desejada.`,
+                options: unitOptions,
+                isIdentified: false
+            });
+        }
+
+        const selectedSchool = session.matchingSchools[choice - 1];
+        session.targetSchoolHash = selectedSchool.hash;
+
+        // Filtra os alunos correspondentes apenas para a escola selecionada
+        const schoolMatches = session.matchingStudents.filter(row => row.schoolHash === session.targetSchoolHash);
+
+        // Limpa variáveis temporárias
+        delete session.matchingSchools;
+        delete session.matchingStudents;
+
+        if (schoolMatches.length === 1) {
+            const row = schoolMatches[0];
+            if (row.SITUACAO === 'B') {
+                const blocked = await getBlockedResponse(session.targetSchoolHash);
+                session.student = null;
+                session.step = 'BLOCKED_REDIRECT';
+                session.availableOptions = blocked.options;
+                return res.json(blocked);
+            }
+
+            session.student = { 
+                id: row.ID_ALUNO, 
+                nome: row.NOME.toString().trim(),
+                email: row.EMAIL ? row.EMAIL.toString().trim() : '',
+                dataNascimento: row.DATA_NASCIMENTO ? row.DATA_NASCIMENTO : null,
+                omEadId: row.OM_EAD_ID ? row.OM_EAD_ID.toString().trim() : '',
+                matricula: row.MATRICULA ? row.MATRICULA.toString().trim() : '',
+                situacao: row.SITUACAO
+            };
+            await fillStudentSessionData(session.targetSchoolHash, session);
+
+            const targetHash = session.targetSchoolHash;
+            if (session.intent === 'boletim') {
+                return res.json(await handleBoletimCourseSelection(targetHash, session));
+            }
+
+            let responseText = '';
+            if (session.intent === 'boleto') {
+                responseText = await processBoleto(targetHash, session, session.student.id, session.student.nome);
+            } else if (session.intent === 'horarios') {
+                responseText = await processHorarios(targetHash, session, session.student.id, session.student.nome);
+            } else if (session.intent === 'conteudo') {
+                responseText = await processConteudo(targetHash, session, session.student.id, session.student.nome);
+            } else if (session.intent === 'plataforma') {
+                responseText = await processPlataforma(targetHash, session, session.student.id, session.student.nome);
+            }
+
+            const greeting = await getGreetingMessage(targetHash, session.student.id, session.student.nome);
+            session.step = 'WELCOME';
+            return res.json({ 
+                response: responseText,
+                options: greeting.options,
+                isIdentified: true
+            });
+        } else {
+            // Múltiplos alunos (irmãos) na unidade selecionada
+            session.students = schoolMatches.map(row => ({ 
                 id: row.ID_ALUNO, 
                 nome: row.NOME.toString().trim(),
                 email: row.EMAIL ? row.EMAIL.toString().trim() : '',
@@ -1490,7 +1694,7 @@ async function chatHandler(req, res) {
             }));
             session.step = 'AWAITING_STUDENT_SELECTION';
 
-            let listResponse = 'Encontrei mais de um aluno associado a esses dados. Por favor, escolha qual aluno você deseja consultar digitando o número correspondente:\n\n';
+            let listResponse = 'Encontrei mais de um aluno associado a esses dados nessa unidade. Por favor, escolha qual aluno você deseja consultar digitando o número correspondente:\n\n';
             session.students.forEach((s, idx) => {
                 listResponse += `${idx + 1} - **${s.nome}**\n`;
             });
@@ -1504,14 +1708,6 @@ async function chatHandler(req, res) {
             return res.json({ 
                 response: listResponse,
                 options: studentOptions,
-                isIdentified: false
-            });
-
-        } catch (err) {
-            console.error('Erro ao consultar banco:', err);
-            return res.json({ 
-                response: 'Ops, estou com dificuldade para me conectar 😕.',
-                options: [],
                 isIdentified: false
             });
         }
@@ -1532,8 +1728,9 @@ async function chatHandler(req, res) {
         }
 
         const selected = session.students[choice - 1];
+        const targetHash = session.targetSchoolHash || session.hash;
         if (selected.situacao === 'B') {
-            const blocked = await getBlockedResponse(session.hash);
+            const blocked = await getBlockedResponse(targetHash);
             session.student = null;
             session.step = 'BLOCKED_REDIRECT';
             session.availableOptions = blocked.options;
@@ -1541,26 +1738,26 @@ async function chatHandler(req, res) {
         }
 
         session.student = selected;
-        await fillStudentSessionData(session.hash, session);
+        await fillStudentSessionData(targetHash, session);
 
         if (session.intent === 'boletim') {
-            return res.json(await handleBoletimCourseSelection(session.hash, session));
+            return res.json(await handleBoletimCourseSelection(targetHash, session));
         }
 
         session.step = 'WELCOME';
 
         let responseText = '';
         if (session.intent === 'boleto') {
-            responseText = await processBoleto(session.hash, session, session.student.id, session.student.nome);
+            responseText = await processBoleto(targetHash, session, session.student.id, session.student.nome);
         } else if (session.intent === 'horarios') {
-            responseText = await processHorarios(session.hash, session, session.student.id, session.student.nome);
+            responseText = await processHorarios(targetHash, session, session.student.id, session.student.nome);
         } else if (session.intent === 'conteudo') {
-            responseText = await processConteudo(session.hash, session, session.student.id, session.student.nome);
+            responseText = await processConteudo(targetHash, session, session.student.id, session.student.nome);
         } else if (session.intent === 'plataforma') {
-            responseText = await processPlataforma(session.hash, session, session.student.id, session.student.nome);
+            responseText = await processPlataforma(targetHash, session, session.student.id, session.student.nome);
         }
 
-        const greeting = await getGreetingMessage(session.hash, session.student.id, session.student.nome);
+        const greeting = await getGreetingMessage(targetHash, session.student.id, session.student.nome);
         return res.json({ 
             response: responseText,
             options: greeting.options,
@@ -1595,7 +1792,8 @@ async function chatHandler(req, res) {
         `;
 
         try {
-            const grades = await db.execute(session.hash, gradesQuery, [selectedCourse.id]);
+            const targetHash = session.targetSchoolHash || session.hash;
+            const grades = await db.execute(targetHash, gradesQuery, [selectedCourse.id]);
             
             const dataInicialStr = formatDate(selectedCourse.dataInicial);
             let terminoStr = '';
@@ -1651,7 +1849,7 @@ async function chatHandler(req, res) {
             }
 
             session.step = 'WELCOME';
-            const greeting = await getGreetingMessage(session.hash, session.student.id, session.student.nome);
+            const greeting = await getGreetingMessage(targetHash, session.student.id, session.student.nome);
 
             responseText += `\n\nSe precisar de algo mais, escolha outra opção ou digite **Sair**.`;
 
@@ -1664,9 +1862,10 @@ async function chatHandler(req, res) {
         } catch (err) {
             console.error('Erro ao buscar notas do boletim:', err);
             session.step = 'WELCOME';
-            const greeting = await getGreetingMessage(session.hash, session.student.id, session.student.nome);
+            const targetHash = session.targetSchoolHash || session.hash;
+            const greeting = await getGreetingMessage(targetHash, session.student.id, session.student.nome);
             return res.json({
-                response: 'Ocorreu um erro ao buscar as notas do boletim. Por favor, tente novamente.',
+                response: 'Erro ao consultar boletim.',
                 options: greeting.options,
                 isIdentified: true
             });
@@ -1689,6 +1888,155 @@ async function processChatMessage(sessionId, message, hash) {
         });
     });
 }
+
+// CONTROLE DE ACESSO ADMINISTRATIVO PARA FRANQUIAS
+const activeAdminTokens = new Set();
+
+function requireAdminAuth(req, res, next) {
+    const token = req.headers['x-admin-token'];
+    if (!token || !activeAdminTokens.has(token)) {
+        return res.status(401).json({ error: 'NÃO_AUTORIZADO', message: 'Acesso negado. Faça login.' });
+    }
+    next();
+}
+
+// Servir a página administrativa de franquias
+app.get('/admin/franquias', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'admin_franquias.html'));
+});
+
+// Login do suporte
+app.post('/api/admin/franquias/login', (req, res) => {
+    const { code, password } = req.body;
+    if (code === '123456' && password === '3529') {
+        const token = crypto.randomBytes(32).toString('hex');
+        activeAdminTokens.add(token);
+        return res.json({ success: true, token });
+    }
+    return res.status(401).json({ error: 'LOGIN_INVALIDO', message: 'Código ou senha incorretos.' });
+});
+
+// Logout do suporte
+app.post('/api/admin/franquias/logout', (req, res) => {
+    const token = req.headers['x-admin-token'];
+    if (token) {
+        activeAdminTokens.delete(token);
+    }
+    res.json({ success: true });
+});
+
+// Listar franquias (e contagem de escolas)
+app.get('/api/admin/franquias', requireAdminAuth, async (req, res) => {
+    try {
+        const pool = ConfigService.getCentralPool();
+        const [rows] = await pool.execute(`
+            SELECT f.id, f.nome, f.dia_vencimento, f.created_at, COUNT(e.id_atendimento) AS total_escolas
+            FROM franquias f
+            LEFT JOIN escola_configs e ON e.franquia_id = f.id
+            GROUP BY f.id
+            ORDER BY f.nome ASC
+        `);
+        res.json(rows);
+    } catch (err) {
+        console.error('Erro ao listar franquias:', err);
+        res.status(500).json({ error: 'ERRO_INTERNO', message: err.message });
+    }
+});
+
+// Criar franquia
+app.post('/api/admin/franquias', requireAdminAuth, async (req, res) => {
+    const { nome, dia_vencimento } = req.body;
+    if (!nome || !nome.trim()) {
+        return res.status(400).json({ error: 'DADO_INVALIDO', message: 'Nome da franquia é obrigatório.' });
+    }
+    const diaVenc = dia_vencimento ? parseInt(dia_vencimento) : null;
+    try {
+        const pool = ConfigService.getCentralPool();
+        const [result] = await pool.execute('INSERT INTO franquias (nome, dia_vencimento) VALUES (?, ?)', [nome.trim(), diaVenc]);
+        res.json({ id: result.insertId, nome: nome.trim(), dia_vencimento: diaVenc, total_escolas: 0 });
+    } catch (err) {
+        console.error('Erro ao criar franquia:', err);
+        res.status(500).json({ error: 'ERRO_INTERNO', message: err.message });
+    }
+});
+
+// Editar franquia
+app.put('/api/admin/franquias/:id', requireAdminAuth, async (req, res) => {
+    const { id } = req.params;
+    const { nome, dia_vencimento } = req.body;
+    if (!nome || !nome.trim()) {
+        return res.status(400).json({ error: 'DADO_INVALIDO', message: 'Nome da franquia é obrigatório.' });
+    }
+    const diaVenc = dia_vencimento ? parseInt(dia_vencimento) : null;
+    try {
+        const pool = ConfigService.getCentralPool();
+        await pool.execute('UPDATE franquias SET nome = ?, dia_vencimento = ? WHERE id = ?', [nome.trim(), diaVenc, id]);
+        
+        // Invalida o cache de todas as escolas da franquia modificada
+        const [schools] = await pool.execute('SELECT id_atendimento FROM escola_configs WHERE franquia_id = ?', [id]);
+        for (const s of schools) {
+            ConfigService.invalidateCache(s.id_atendimento);
+        }
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Erro ao atualizar franquia:', err);
+        res.status(500).json({ error: 'ERRO_INTERNO', message: err.message });
+    }
+});
+
+// Excluir franquia
+app.delete('/api/admin/franquias/:id', requireAdminAuth, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const pool = ConfigService.getCentralPool();
+        // Remove associação nas escola_configs
+        await pool.execute('UPDATE escola_configs SET franquia_id = NULL WHERE franquia_id = ?', [id]);
+        // Remove a franquia
+        await pool.execute('DELETE FROM franquias WHERE id = ?', [id]);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Erro ao excluir franquia:', err);
+        res.status(500).json({ error: 'ERRO_INTERNO', message: err.message });
+    }
+});
+
+// Listar escolas para mapeamento de franquia
+app.get('/api/admin/franquias/schools', requireAdminAuth, async (req, res) => {
+    try {
+        const pool = ConfigService.getCentralPool();
+        const [rows] = await pool.execute(`
+            SELECT id_atendimento, nome_fantasia, franquia_id 
+            FROM escola_configs 
+            ORDER BY nome_fantasia ASC
+        `);
+        res.json(rows);
+    } catch (err) {
+        console.error('Erro ao listar escolas:', err);
+        res.status(500).json({ error: 'ERRO_INTERNO', message: err.message });
+    }
+});
+
+// Associar escola a uma franquia
+app.post('/api/admin/franquias/schools/associate', requireAdminAuth, async (req, res) => {
+    const { id_atendimento, franquia_id } = req.body;
+    if (!id_atendimento) {
+        return res.status(400).json({ error: 'DADO_INVALIDO', message: 'ID da escola é obrigatório.' });
+    }
+    try {
+        const pool = ConfigService.getCentralPool();
+        const fid = franquia_id ? parseInt(franquia_id) : null;
+        await pool.execute('UPDATE escola_configs SET franquia_id = ? WHERE id_atendimento = ?', [fid, id_atendimento]);
+        
+        // Invalida o cache da escola no ConfigService
+        ConfigService.invalidateCache(id_atendimento);
+        
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Erro ao associar escola à franquia:', err);
+        res.status(500).json({ error: 'ERRO_INTERNO', message: err.message });
+    }
+});
 
 // ROTAS DE CONFIGURAÇÃO DO BANCO DE DADOS
 app.get('/api/config', async (req, res) => {

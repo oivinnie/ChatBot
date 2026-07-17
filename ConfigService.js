@@ -153,12 +153,22 @@ async function getSchoolConfig(idOrHash) {
     const pool = getCentralPool();
     let rows;
     
-    // Busca por id_atendimento ou por hash
+    // Busca por id_atendimento ou por hash com LEFT JOIN em franquias (incluindo dia_vencimento)
     if (/^\d+$/.test(strKey)) {
-        const [r] = await pool.execute('SELECT * FROM escola_configs WHERE id_atendimento = ?', [parseInt(strKey)]);
+        const [r] = await pool.execute(`
+            SELECT ec.*, f.nome AS nome_franquia, f.dia_vencimento AS dia_vencimento_franquia
+            FROM escola_configs ec
+            LEFT JOIN franquias f ON ec.franquia_id = f.id
+            WHERE ec.id_atendimento = ?
+        `, [parseInt(strKey)]);
         rows = r;
     } else {
-        const [r] = await pool.execute('SELECT * FROM escola_configs WHERE hash = ?', [strKey]);
+        const [r] = await pool.execute(`
+            SELECT ec.*, f.nome AS nome_franquia, f.dia_vencimento AS dia_vencimento_franquia
+            FROM escola_configs ec
+            LEFT JOIN franquias f ON ec.franquia_id = f.id
+            WHERE ec.hash = ?
+        `, [strKey]);
         rows = r;
     }
 
@@ -167,6 +177,41 @@ async function getSchoolConfig(idOrHash) {
     }
 
     const config = rows[0];
+
+    // Se pertence a uma franquia, verifica se alguma escola da franquia está atrasada
+    if (config.franquia_id) {
+        let franchiseBlocked = false;
+        try {
+            const [siblings] = await pool.execute(
+                'SELECT vencimento FROM escola_configs WHERE franquia_id = ? AND status = "ativo"',
+                [config.franquia_id]
+            );
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            for (const sibling of siblings) {
+                if (sibling.vencimento) {
+                    const venc = new Date(sibling.vencimento);
+                    if (config.dia_vencimento_franquia) {
+                        venc.setDate(config.dia_vencimento_franquia);
+                    }
+                    venc.setHours(0, 0, 0, 0);
+
+                    const blockLimit = new Date(venc);
+                    blockLimit.setDate(blockLimit.getDate() + 2);
+
+                    if (today.getTime() > blockLimit.getTime()) {
+                        franchiseBlocked = true;
+                        break;
+                    }
+                }
+            }
+        } catch (errDb) {
+            console.error('Erro ao verificar bloqueio da franquia:', errDb.message);
+        }
+        config.franchise_blocked = franchiseBlocked;
+    }
 
     // Converte show_... fields para booleanos se necessário
     const booleanFields = [
@@ -569,6 +614,52 @@ async function checkAndSyncSchoolPaymentOnDemand(school, forceSync = false) {
     return school;
 }
 
+/**
+ * Obtém a lista de escolas ativas pertencentes à mesma franquia
+ * @param {string} currentHash Hash da escola que iniciou o atendimento
+ * @returns {Promise<Array<{hash: string, nome_fantasia: string}>>}
+ */
+async function getFranchiseSchools(currentHash) {
+    const mainConfig = await getSchoolConfig(currentHash);
+    if (!mainConfig) return [];
+
+    // Se não for franquia, retorna apenas a própria escola
+    if (!mainConfig.franquia_id) {
+        return [{
+            hash: mainConfig.hash,
+            nome_fantasia: mainConfig.nome_fantasia
+        }];
+    }
+
+    const pool = getCentralPool();
+    // Busca todas as escolas ativas da mesma franquia
+    const [rows] = await pool.execute(
+        `SELECT ec.hash, ec.nome_fantasia, ec.vencimento 
+         FROM escola_configs ec
+         WHERE ec.franquia_id = ? AND ec.status = 'ativo'`,
+        [mainConfig.franquia_id]
+    );
+
+    // Filtra escolas bloqueadas por atraso financeiro antes de retornar
+    return rows.filter(school => {
+        if (school.vencimento) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            const venc = new Date(school.vencimento);
+            venc.setHours(0, 0, 0, 0);
+            
+            const blockLimit = new Date(venc);
+            blockLimit.setDate(blockLimit.getDate() + 2);
+            
+            if (today.getTime() > blockLimit.getTime()) {
+                return false; // Ignora escola bloqueada por pagamento
+            }
+        }
+        return true;
+    });
+}
+
 module.exports = {
     encrypt,
     decrypt,
@@ -582,5 +673,6 @@ module.exports = {
     syncSchoolPayment,
     checkAndSyncSchoolPaymentOnDemand,
     deleteSchoolConfig,
-    verifySchoolDkappStatus
+    verifySchoolDkappStatus,
+    getFranchiseSchools
 };

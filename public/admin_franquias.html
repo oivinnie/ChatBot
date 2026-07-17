@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administração de Franquias - Chatbot</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <style>
+        .admin-layout {
+            display: flex;
+            gap: 24px;
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            align-items: flex-start;
+        }
+        .admin-column {
+            flex: 1;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.08);
+            padding: 24px;
+            min-height: 500px;
+        }
+        .login-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.08);
+            padding: 40px;
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: #10b981;
+            color: #ffffff;
+            padding: 12px 24px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(16, 185, 129, 0.3);
+            font-weight: 500;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s ease;
+            z-index: 9999;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .toast.error {
+            background: #ef4444;
+            box-shadow: 0 10px 25px rgba(239, 68, 68, 0.3);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+        }
+        th, td {
+            text-align: left;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        th {
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+        .btn-action {
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            font-weight: 500;
+            margin-right: 4px;
+            transition: all 0.2s ease;
+        }
+        .btn-edit {
+            background: rgba(79, 70, 229, 0.1);
+            color: #4f46e5;
+            border-color: rgba(79, 70, 229, 0.2);
+        }
+        .btn-edit:hover {
+            background: #4f46e5;
+            color: #ffffff;
+        }
+        .btn-delete {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border-color: rgba(239, 68, 68, 0.2);
+        }
+        .btn-delete:hover {
+            background: #ef4444;
+            color: #ffffff;
+        }
+        select.admin-select {
+            padding: 8px 12px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            background: #ffffff;
+            width: 100%;
+            outline: none;
+            font-family: inherit;
+            color: var(--text-primary);
+            cursor: pointer;
+        }
+        .form-group {
+            margin-bottom: 16px;
+            text-align: left;
+        }
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+        .form-input {
+            width: 100%;
+            padding: 10px 14px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            outline: none;
+            font-family: inherit;
+        }
+        .form-input:focus {
+            border-color: #4f46e5;
+        }
+        .header-section {
+            width: 100%;
+            max-width: 1200px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 0 auto 24px auto;
+        }
+        .btn-primary {
+            background: var(--primary-gradient);
+            color: #ffffff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 500;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.25);
+        }
+        .btn-primary:hover {
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body style="padding: 40px 20px; flex-direction: column; justify-content: flex-start;">
+
+    <!-- TELA DE LOGIN -->
+    <div id="loginContainer" class="login-card">
+        <img src="https://www.dksoft.com.br/images/logo.png" alt="DKSoft Logo" style="width: 140px; margin-bottom: 16px;">
+        <h2 style="font-size: 20px; margin-bottom: 8px;">Acesso de Suporte</h2>
+        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 24px;">Área restrita para gerenciamento de franquias.</p>
+        
+        <form id="adminLoginForm" onsubmit="handleLogin(event)">
+            <div class="form-group">
+                <label for="adminCodeInput">Código de Acesso</label>
+                <input type="text" id="adminCodeInput" class="form-input" required placeholder="Digite o código">
+            </div>
+            <div class="form-group" style="margin-bottom: 24px;">
+                <label for="adminPasswordInput">Senha</label>
+                <input type="password" id="adminPasswordInput" class="form-input" required placeholder="Digite a senha">
+            </div>
+            <button type="submit" id="loginBtn" class="btn-primary" style="width: 100%;">🚪 Entrar</button>
+        </form>
+    </div>
+
+    <!-- TELA DO PAINEL DE CONTROLE (Oculto por padrão) -->
+    <div id="dashboardContainer" style="display: none; width: 100%;">
+        <div class="header-section">
+            <div>
+                <h1 style="font-size: 24px; font-weight: 700; color: var(--text-primary);">Administração de Franquias</h1>
+                <p style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">Associe escolas e gerencie as marcas de franquias do chatbot.</p>
+            </div>
+            <button onclick="handleLogout()" id="logoutBtn" class="btn-action btn-delete" style="padding: 10px 16px; font-size: 14px;">🚪 Sair</button>
+        </div>
+
+        <div class="admin-layout">
+            <!-- Coluna Esquerda: Cadastro e Lista de Franquias -->
+            <div class="admin-column">
+                <h2 style="font-size: 18px; margin-bottom: 16px;" id="formTitle">Criar Nova Franquia</h2>
+                <form id="franchiseForm" onsubmit="handleSaveFranchise(event)" style="margin-bottom: 24px; display: flex; gap: 12px; align-items: flex-end;">
+                    <input type="hidden" id="editFranchiseId">
+                    <div class="form-group" style="flex: 2; margin-bottom: 0;">
+                        <label for="franchiseNameInput">Nome da Franquia</label>
+                        <input type="text" id="franchiseNameInput" class="form-input" required placeholder="Ex: DKSOFT Franchising">
+                    </div>
+                    <div class="form-group" style="flex: 1; margin-bottom: 0; min-width: 100px;">
+                        <label for="franchiseDueDayInput">Dia Vencimento</label>
+                        <input type="number" id="franchiseDueDayInput" class="form-input" min="1" max="31" placeholder="Ex: 15">
+                    </div>
+                    <button type="submit" id="franchiseSaveBtn" class="btn-primary">Salvar</button>
+                    <button type="button" onclick="resetFranchiseForm()" id="cancelEditBtn" class="btn-action" style="display: none; padding: 10px;">Cancelar</button>
+                </form>
+
+                <hr style="border: 0; border-top: 1px solid var(--border-color); margin-bottom: 16px;">
+
+                <h3 style="font-size: 16px; margin-bottom: 12px;">Franquias Cadastradas</h3>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 60px;">ID</th>
+                                <th>Nome</th>
+                                <th style="width: 90px; text-align: center;">Dia Venc.</th>
+                                <th style="width: 80px; text-align: center;">Escolas</th>
+                                <th style="width: 140px; text-align: center;">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="franchiseTableBody">
+                            <!-- Inserido dinamicamente -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Coluna Direita: Mapeamento de Escolas -->
+            <div class="admin-column">
+                <h2 style="font-size: 18px; margin-bottom: 16px;">Associação de Escolas</h2>
+                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">Selecione a franquia correspondente para cada unidade escolar cadastrada.</p>
+                
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 100px;">ID Atend.</th>
+                                <th>Nome da Escola</th>
+                                <th style="width: 240px;">Franquia Vinculada</th>
+                            </tr>
+                        </thead>
+                        <tbody id="schoolTableBody">
+                            <!-- Inserido dinamicamente -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION -->
+    <div id="toastNotification" class="toast">Feedback</div>
+
+    <script>
+        let adminToken = localStorage.getItem('franchise_admin_token') || '';
+        let franchises = [];
+
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', () => {
+            if (adminToken) {
+                showDashboard();
+            }
+        });
+
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toastNotification');
+            toast.textContent = message;
+            if (isError) {
+                toast.classList.add('error');
+            } else {
+                toast.classList.remove('error');
+            }
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const code = document.getElementById('adminCodeInput').value;
+            const password = document.getElementById('adminPasswordInput').value;
+
+            try {
+                const response = await fetch('/api/admin/franquias/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code, password })
+                });
+
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    adminToken = data.token;
+                    localStorage.setItem('franchise_admin_token', adminToken);
+                    showToast('Login realizado com sucesso!');
+                    showDashboard();
+                } else {
+                    showToast(data.message || 'Código ou senha incorretos.', true);
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('Erro de conexão com o servidor.', true);
+            }
+        }
+
+        function handleLogout() {
+            fetch('/api/admin/franquias/logout', {
+                method: 'POST',
+                headers: { 'x-admin-token': adminToken }
+            }).finally(() => {
+                adminToken = '';
+                localStorage.removeItem('franchise_admin_token');
+                document.getElementById('dashboardContainer').style.display = 'none';
+                document.getElementById('loginContainer').style.display = 'block';
+                document.getElementById('adminLoginForm').reset();
+            });
+        }
+
+        function showDashboard() {
+            document.getElementById('loginContainer').style.display = 'none';
+            document.getElementById('dashboardContainer').style.display = 'block';
+            loadData();
+        }
+
+        async function loadData() {
+            await Promise.all([
+                loadFranchises(),
+                loadSchools()
+            ]);
+        }
+
+        async function loadFranchises() {
+            try {
+                const response = await fetch('/api/admin/franquias', {
+                    headers: { 'x-admin-token': adminToken }
+                });
+                if (response.status === 401) return handleLogout();
+                
+                franchises = await response.json();
+                renderFranchises();
+            } catch (err) {
+                console.error(err);
+                showToast('Erro ao carregar franquias.', true);
+            }
+        }
+
+        function renderFranchises() {
+            const body = document.getElementById('franchiseTableBody');
+            body.innerHTML = '';
+            
+            if (franchises.length === 0) {
+                body.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-secondary);">Nenhuma franquia cadastrada.</td></tr>`;
+                return;
+            }
+
+            franchises.forEach(f => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${f.id}</td>
+                    <td><strong>${escapeHtml(f.nome)}</strong></td>
+                    <td style="text-align: center;">${f.dia_vencimento || '-'}</td>
+                    <td style="text-align: center;">${f.total_escolas}</td>
+                    <td style="text-align: center;">
+                        <button class="btn-action btn-edit" onclick="editFranchise(${f.id}, '${escapeQuote(f.nome)}', ${f.dia_vencimento || 'null'})">Editar</button>
+                        <button class="btn-action btn-delete" onclick="deleteFranchise(${f.id})">Excluir</button>
+                    </td>
+                `;
+                body.appendChild(tr);
+            });
+        }
+
+        async function loadSchools() {
+            try {
+                const response = await fetch('/api/admin/franquias/schools', {
+                    headers: { 'x-admin-token': adminToken }
+                });
+                if (response.status === 401) return handleLogout();
+                
+                const schools = await response.json();
+                renderSchools(schools);
+            } catch (err) {
+                console.error(err);
+                showToast('Erro ao carregar escolas.', true);
+            }
+        }
+
+        function renderSchools(schools) {
+            const body = document.getElementById('schoolTableBody');
+            body.innerHTML = '';
+
+            if (schools.length === 0) {
+                body.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-secondary);">Nenhuma escola cadastrada no banco central.</td></tr>`;
+                return;
+            }
+
+            schools.forEach(school => {
+                const tr = document.createElement('tr');
+                
+                // Dropdown de seleção de franquia
+                let optionsHtml = `<option value="">-- Independente / Nenhuma --</option>`;
+                franchises.forEach(f => {
+                    const selected = school.franquia_id === f.id ? 'selected' : '';
+                    optionsHtml += `<option value="${f.id}" ${selected}>${escapeHtml(f.nome)}</option>`;
+                });
+
+                tr.innerHTML = `
+                    <td>${school.id_atendimento}</td>
+                    <td><strong>${escapeHtml(school.nome_fantasia)}</strong></td>
+                    <td>
+                        <select class="admin-select" onchange="associateSchool(${school.id_atendimento}, this.value)">
+                            ${optionsHtml}
+                        </select>
+                    </td>
+                `;
+                body.appendChild(tr);
+            });
+        }
+
+        async function handleSaveFranchise(e) {
+            e.preventDefault();
+            const id = document.getElementById('editFranchiseId').value;
+            const nome = document.getElementById('franchiseNameInput').value;
+            const dia_vencimento = document.getElementById('franchiseDueDayInput').value;
+
+            const url = id ? `/api/admin/franquias/${id}` : '/api/admin/franquias';
+            const method = id ? 'PUT' : 'POST';
+
+            try {
+                const response = await fetch(url, {
+                    method: method,
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'x-admin-token': adminToken
+                    },
+                    body: JSON.stringify({ 
+                        nome, 
+                        dia_vencimento: dia_vencimento ? parseInt(dia_vencimento) : null 
+                    })
+                });
+
+                if (response.ok) {
+                    showToast(id ? 'Franquia atualizada com sucesso!' : 'Franquia criada com sucesso!');
+                    resetFranchiseForm();
+                    loadData();
+                } else {
+                    const data = await response.json();
+                    showToast(data.message || 'Erro ao salvar franquia.', true);
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('Erro de conexão.', true);
+            }
+        }
+
+        function editFranchise(id, nome, diaVencimento) {
+            document.getElementById('editFranchiseId').value = id;
+            document.getElementById('franchiseNameInput').value = nome;
+            document.getElementById('franchiseDueDayInput').value = diaVencimento || '';
+            document.getElementById('formTitle').textContent = 'Editar Franquia';
+            document.getElementById('cancelEditBtn').style.display = 'inline-block';
+        }
+
+        function resetFranchiseForm() {
+            document.getElementById('editFranchiseId').value = '';
+            document.getElementById('franchiseNameInput').value = '';
+            document.getElementById('franchiseDueDayInput').value = '';
+            document.getElementById('formTitle').textContent = 'Criar Nova Franquia';
+            document.getElementById('cancelEditBtn').style.display = 'none';
+        }
+
+        async function deleteFranchise(id) {
+            if (!confirm('Deseja realmente excluir esta franquia? As escolas vinculadas se tornarão independentes.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/franquias/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'x-admin-token': adminToken }
+                });
+
+                if (response.ok) {
+                    showToast('Franquia excluída com sucesso!');
+                    loadData();
+                } else {
+                    showToast('Erro ao excluir franquia.', true);
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('Erro de conexão.', true);
+            }
+        }
+
+        async function associateSchool(id_atendimento, franquia_id) {
+            try {
+                const response = await fetch('/api/admin/franquias/schools/associate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-admin-token': adminToken
+                    },
+                    body: JSON.stringify({ 
+                        id_atendimento, 
+                        franquia_id: franquia_id ? parseInt(franquia_id) : null 
+                    })
+                });
+
+                if (response.ok) {
+                    showToast('Associação de escola atualizada!');
+                    loadFranchises(); // Recarrega para atualizar a contagem de escolas nas franquias
+                } else {
+                    showToast('Erro ao atualizar associação.', true);
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('Erro de conexão.', true);
+            }
+        }
+
+        // Helpers
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function escapeQuote(str) {
+            if (!str) return '';
+            return str.replace(/'/g, "\\'");
+        }
+    </script>
+</body>
+</html>
