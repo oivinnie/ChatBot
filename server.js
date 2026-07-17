@@ -1021,13 +1021,19 @@ async function chatHandler(req, res) {
 
     // Evita processamento concorrente para a mesma sessão (corrida de mensagens no WhatsApp)
     if (sessions[sessionId] && sessions[sessionId].isProcessing) {
-        console.log(`[Session Lock] Ignorando mensagem concorrente para a sessão ${sessionId}: "${message}"`);
-        return res.json({
-            response: null,
-            options: [],
-            isIdentified: false,
-            ignored: true
-        });
+        const elapsed = Date.now() - (sessions[sessionId].processingStartedAt || 0);
+        if (elapsed < 10000) { // 10 segundos de tolerância
+            console.log(`[Session Lock] Ignorando mensagem concorrente para a sessão ${sessionId}: "${message}"`);
+            return res.json({
+                response: null,
+                options: [],
+                isIdentified: false,
+                ignored: true
+            });
+        } else {
+            console.warn(`[Session Lock] Trava expirada (10s) detectada para a sessão ${sessionId}. Forçando liberação.`);
+            sessions[sessionId].isProcessing = false;
+        }
     }
 
     // Inicializa a sessão se não existir
@@ -1043,6 +1049,7 @@ async function chatHandler(req, res) {
 
     const session = sessions[sessionId];
     session.isProcessing = true;
+    session.processingStartedAt = Date.now();
 
     // Sobrescreve res.json para liberar a trava de processamento ao responder
     const originalJson = res.json;

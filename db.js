@@ -48,6 +48,30 @@ function parseDatabasePath(dbPath, defaultHost = 'node270594-chatbot.sp1.br.save
 // Executa uma consulta no Firebird com suporte a conexão dinâmica
 function execute(hashOrQuery, queryOrParams, params = []) {
     return new Promise((resolve, reject) => {
+        let isSettled = false;
+        const timeoutId = setTimeout(() => {
+            if (!isSettled) {
+                isSettled = true;
+                reject(new Error('DATABASE_TIMEOUT'));
+            }
+        }, 8000); // 8 segundos de limite para evitar travamentos
+
+        const safeResolve = (val) => {
+            if (!isSettled) {
+                isSettled = true;
+                clearTimeout(timeoutId);
+                resolve(val);
+            }
+        };
+
+        const safeReject = (err) => {
+            if (!isSettled) {
+                isSettled = true;
+                clearTimeout(timeoutId);
+                reject(err);
+            }
+        };
+
         let hash = null;
         let query = '';
         let queryParams = [];
@@ -98,13 +122,13 @@ function execute(hashOrQuery, queryOrParams, params = []) {
 
             Firebird.attach(options, function(err, db) {
                 if (err) {
-                    return reject(err);
+                    return safeReject(err);
                 }
 
                 db.query(query, queryParams, async function(err, result) {
                     if (err) {
                         db.detach();
-                        return reject(err);
+                        return safeReject(err);
                     }
 
                     try {
@@ -127,14 +151,14 @@ function execute(hashOrQuery, queryOrParams, params = []) {
                             }
                         }
                         db.detach();
-                        resolve(result);
+                        safeResolve(result);
                     } catch (blobErr) {
                         db.detach();
-                        reject(blobErr);
+                        safeReject(blobErr);
                     }
                 });
             });
-        }).catch(reject);
+        }).catch(safeReject);
     });
 }
 
