@@ -130,11 +130,7 @@ function appendMessage(sender, text, options = null, isIdentified = false, extra
     }
     
     chatLog.appendChild(messageDiv);
-    if (chatLog.children.length <= 1) {
-        chatLog.scrollTop = 0;
-    } else {
-        chatLog.scrollTop = chatLog.scrollHeight;
-    }
+    chatLog.scrollTop = 0;
 }
 
 // Mostra o indicador de digitação do Bot
@@ -155,7 +151,7 @@ function showTypingIndicator() {
     
     typingIndicator.appendChild(indicatorContent);
     chatLog.appendChild(typingIndicator);
-    chatLog.scrollTop = chatLog.scrollHeight;
+    chatLog.scrollTop = 0;
 }
 
 // Remove o indicador de digitação do Bot

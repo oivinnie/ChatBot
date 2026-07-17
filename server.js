@@ -294,7 +294,7 @@ async function getAvailableOptions(hash, studentId = null) {
         options.push({ 
             id: 'validador', 
             label: 'Validador de Certificado', 
-            url: 'https://suportedksoft.com.br/certificado/' 
+            url: null 
         });
     }
 
@@ -313,7 +313,7 @@ async function getAvailableOptions(hash, studentId = null) {
         options.push({ 
             id: 'atendente', 
             label: 'Falar com atendente', 
-            url: `https://wa.me/${config.atendimento_numero.toString().replace(/\D/g, '')}` 
+            url: null 
         });
     }
 
@@ -388,7 +388,7 @@ async function getBlockedResponse(hash) {
         atendenteOptions.push({
             id: 'atendente',
             label: 'Falar com atendente',
-            url: `https://wa.me/${atendimentoNumber.replace(/\D/g, '')}`
+            url: null
         });
         responseText += `\n\n${optIndex} - **Falar com atendente**`;
         optIndex++;
@@ -812,15 +812,17 @@ async function processPlataforma(hash, session, studentId, studentName) {
             const portalUrl = config.portal_aluno_link || 'https://portal.dksoft.com.br/';
             
             const matricula = session.student.matricula ? session.student.matricula.trim() : 'Não cadastrada';
-            const anoNascimento = getBirthYear(session.student.dataNascimento) || 'Não cadastrado';
             
             let response = `Aqui estão as credenciais para acesso ao seu Portal do Aluno DKSOFT, **${studentName}**:\n\n`;
             response += `💻 **Portal do Aluno DKSOFT**\n`;
             response += `🔗 Link: **[${portalUrl.replace(/^https?:\/\//i, '')}](${portalUrl})**\n`;
             response += `👤 Login: \`${matricula}\`\n`;
-            response += `🔑 Senha: \`${anoNascimento}\`\n\n`;
+            response += `🔑 Senha: \`Ano do seu nascimento\`\n\n`;
             
-            response += `⏰ **Seus Horários de Aula na Plataforma:**\n${schedulesText}\n\n`;
+            if (isEvolua || isOmEad || isGillis) {
+                response += `⏰ **Seus Horários de Aula na Plataforma:**\n${schedulesText}\n\n`;
+            }
+            
             response += `Se precisar de algo mais, escolha outra opção ou digite **Sair**.`;
             return response;
         }
@@ -1056,7 +1058,7 @@ async function chatHandler(req, res) {
             const config = (await ConfigService.getSchoolConfig(session.hash)) || {};
             const number = config.atendimento_numero ? config.atendimento_numero.replace(/\D/g, '') : '';
             const responseText = number 
-                ? `Para falar com um atendente, clique no link a seguir: https://wa.me/${number}` 
+                ? `Clique nesse link para falar com um atendente da escola via whatsapp: [https://wa.me/${number}](https://wa.me/${number})` 
                 : `Desculpe, o número de atendimento não está configurado.`;
             
             session.step = 'WELCOME';
@@ -1096,7 +1098,7 @@ async function chatHandler(req, res) {
             const config = (await ConfigService.getSchoolConfig(session.hash)) || {};
             const number = config.atendimento_numero ? config.atendimento_numero.replace(/\D/g, '') : '';
             const responseText = number 
-                ? `Para falar com um atendente, clique no link a seguir: https://wa.me/${number}` 
+                ? `Clique nesse link para falar com um atendente da escola via whatsapp: [https://wa.me/${number}](https://wa.me/${number})` 
                 : `Desculpe, o número de atendimento não está configurado.`;
             
             session.step = 'WELCOME';
@@ -1269,12 +1271,14 @@ async function chatHandler(req, res) {
                     });
                 }
             } else if (selectedOption.id === 'validador') {
+                const config = (await ConfigService.getSchoolConfig(session.hash)) || {};
+                const link = config.validador_certificado_link || 'https://suportedksoft.com.br/certificado/';
                 const greeting = await getGreetingMessage(session.hash);
                 return res.json({
-                    response: `Acessando o validador de certificado...`,
+                    response: `Clique no link a seguir para validar seu certificado:\n[${link}](${link})`,
                     options: greeting.options,
                     isIdentified: false,
-                    redirectUrl: 'https://suportedksoft.com.br/certificado/'
+                    redirectUrl: null
                 });
             } else if (selectedOption.id === 'cadastro') {
                 const config = (await ConfigService.getSchoolConfig(session.hash)) || {};
@@ -1299,7 +1303,7 @@ async function chatHandler(req, res) {
                         cadastroOptions.push({
                             id: 'atendente',
                             label: 'Falar com atendente',
-                            url: `https://wa.me/${atendimentoNumber.replace(/\D/g, '')}`
+                            url: null
                         });
                         responseText += `\n\n${optIndex} - **Falar com atendente**`;
                         optIndex++;
@@ -1327,7 +1331,7 @@ async function chatHandler(req, res) {
                 const config = (await ConfigService.getSchoolConfig(session.hash)) || {};
                 const number = config.atendimento_numero ? config.atendimento_numero.replace(/\D/g, '') : '';
                 const responseText = number 
-                    ? `Para falar com um atendente, clique no link a seguir: https://wa.me/${number}` 
+                    ? `Clique nesse link para falar com um atendente da escola via whatsapp:\n[https://wa.me/${number}](https://wa.me/${number})` 
                     : `Desculpe, o número de atendimento não está configurado.`;
                 const greeting = await getGreetingMessage(session.hash, session.student ? session.student.id : null, session.student ? session.student.nome : null);
                 return res.json({
@@ -1604,38 +1608,43 @@ async function chatHandler(req, res) {
             if (grades.length === 0) {
                 responseText += `Nenhuma nota registrada para este curso. 📖`;
             } else {
-                responseText += `**Notas:**\n`;
-                
-                const normalExams = [];
-                const mediaExams = [];
+                const modulesMap = new Map();
                 
                 grades.forEach(g => {
                     const isMedia = g.MEDIA && g.MEDIA.toString().trim().toUpperCase() === 'S';
                     const notaFormatted = g.NOTA !== null && g.NOTA !== undefined ? g.NOTA.toString() : 'Sem Nota';
                     const provaNome = g.PROVA_NOME ? g.PROVA_NOME.toString().trim() : 'Prova';
                     const dataStr = g.DATA ? ` (${formatDate(g.DATA)})` : '';
+                    const moduloNome = g.MODULO_NOME ? g.MODULO_NOME.toString().trim() : 'Geral';
+                    
+                    if (!modulesMap.has(moduloNome)) {
+                        modulesMap.set(moduloNome, { normal: [], media: [] });
+                    }
                     
                     if (isMedia) {
-                        const moduloNome = g.MODULO_NOME ? g.MODULO_NOME.toString().trim() : '';
-                        const label = moduloNome ? `MÉDIA - ${moduloNome}` : provaNome;
-                        const examLine = `• **${label}**: ${notaFormatted}${dataStr}`;
-                        mediaExams.push(examLine);
+                        const examLine = `• **${provaNome}**: ${notaFormatted}${dataStr}`;
+                        modulesMap.get(moduloNome).media.push(examLine);
                     } else {
                         const examLine = `• **${provaNome}**: ${notaFormatted}${dataStr}`;
-                        normalExams.push(examLine);
+                        modulesMap.get(moduloNome).normal.push(examLine);
                     }
                 });
                 
-                normalExams.forEach(line => {
-                    responseText += `${line}\n`;
+                modulesMap.forEach((exams, moduloNome) => {
+                    responseText += `\n**Módulo: ${moduloNome}**\n`;
+                    if (exams.normal.length > 0) {
+                        exams.normal.forEach(line => {
+                            responseText += `${line}\n`;
+                        });
+                    } else if (exams.media.length === 0) {
+                        responseText += `• Nenhuma nota registrada para este módulo.\n`;
+                    }
+                    if (exams.media.length > 0) {
+                        exams.media.forEach(line => {
+                            responseText += `${line}\n`;
+                        });
+                    }
                 });
-                
-                if (mediaExams.length > 0) {
-                    responseText += `\n**Médias:**\n`;
-                    mediaExams.forEach(line => {
-                        responseText += `${line}\n`;
-                    });
-                }
             }
 
             session.step = 'WELCOME';
