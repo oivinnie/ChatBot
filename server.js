@@ -300,11 +300,10 @@ async function getAvailableOptions(hash, studentId = null) {
 
     // 7. Cadastro de Interessados (Apenas se não identificado e showInteressados ativo)
     if (!studentId && showInteressados) {
-        const hasLink = config.cadastro_interessados_link && config.cadastro_interessados_link.toString().trim() !== '';
         options.push({ 
             id: 'cadastro', 
             label: 'Ainda não sou aluno', 
-            url: hasLink ? formatUrl(config.cadastro_interessados_link.toString()) : null 
+            url: null 
         });
     }
 
@@ -366,10 +365,10 @@ async function getGreetingMessage(hash, studentId = null, studentName = null) {
     const extraButtons = [];
     if (!studentId) {
         if (config.show_validador !== false && config.validador_certificado_link) {
-            extraButtons.push({ id: 'validador', label: 'Validador de Certificado', url: config.validador_certificado_link });
+            extraButtons.push({ id: 'validador', label: 'Validador de Certificado', url: null });
         }
         if (config.show_interessados !== false && config.cadastro_interessados_link) {
-            extraButtons.push({ id: 'cadastro', label: 'Ainda não sou aluno', url: config.cadastro_interessados_link });
+            extraButtons.push({ id: 'cadastro', label: 'Ainda não sou aluno', url: null });
         }
     }
 
@@ -1058,7 +1057,7 @@ async function chatHandler(req, res) {
             const config = (await ConfigService.getSchoolConfig(session.hash)) || {};
             const number = config.atendimento_numero ? config.atendimento_numero.replace(/\D/g, '') : '';
             const responseText = number 
-                ? `Clique nesse link para falar com um atendente da escola via whatsapp: [https://wa.me/${number}](https://wa.me/${number})` 
+                ? `Clique nesse link para falar com um atendente da escola via whatsapp: [Abrir WhatsApp](https://wa.me/${number})` 
                 : `Desculpe, o número de atendimento não está configurado.`;
             
             session.step = 'WELCOME';
@@ -1098,7 +1097,7 @@ async function chatHandler(req, res) {
             const config = (await ConfigService.getSchoolConfig(session.hash)) || {};
             const number = config.atendimento_numero ? config.atendimento_numero.replace(/\D/g, '') : '';
             const responseText = number 
-                ? `Clique nesse link para falar com um atendente da escola via whatsapp: [https://wa.me/${number}](https://wa.me/${number})` 
+                ? `Clique nesse link para falar com um atendente da escola via whatsapp: [Abrir WhatsApp](https://wa.me/${number})` 
                 : `Desculpe, o número de atendimento não está configurado.`;
             
             session.step = 'WELCOME';
@@ -1273,25 +1272,25 @@ async function chatHandler(req, res) {
             } else if (selectedOption.id === 'validador') {
                 const config = (await ConfigService.getSchoolConfig(session.hash)) || {};
                 const link = config.validador_certificado_link || 'https://suportedksoft.com.br/certificado/';
-                const greeting = await getGreetingMessage(session.hash);
+                const greeting = await getGreetingMessage(session.hash, session.student ? session.student.id : null, session.student ? session.student.nome : null);
                 return res.json({
-                    response: `Clique no link a seguir para validar seu certificado:\n[${link}](${link})`,
+                    response: `Clique no link a seguir para validar seu certificado:\n[Validador de certificado](${link})`,
                     options: greeting.options,
-                    isIdentified: false,
+                    isIdentified: !!session.student,
                     redirectUrl: null
                 });
             } else if (selectedOption.id === 'cadastro') {
                 const config = (await ConfigService.getSchoolConfig(session.hash)) || {};
-                const greeting = await getGreetingMessage(session.hash);
+                const greeting = await getGreetingMessage(session.hash, session.student ? session.student.id : null, session.student ? session.student.nome : null);
                 const redirectUrl = config.cadastro_interessados_link && config.cadastro_interessados_link.toString().trim() !== ''
                     ? formatUrl(config.cadastro_interessados_link.toString())
                     : null;
                 if (redirectUrl) {
                     return res.json({
-                        response: `Acessando o cadastro de interessados...`,
+                        response: `Clique no link a seguir para se cadastrar:\n[Quero conhecer os cursos](${redirectUrl})\n\nEm breve um atendente retornará o contato 😉`,
                         options: greeting.options,
-                        isIdentified: false,
-                        redirectUrl: redirectUrl
+                        isIdentified: !!session.student,
+                        redirectUrl: null
                     });
                 } else {
                     const atendimentoNumber = config.atendimento_numero ? config.atendimento_numero.toString().trim() : '';
@@ -1331,7 +1330,7 @@ async function chatHandler(req, res) {
                 const config = (await ConfigService.getSchoolConfig(session.hash)) || {};
                 const number = config.atendimento_numero ? config.atendimento_numero.replace(/\D/g, '') : '';
                 const responseText = number 
-                    ? `Clique nesse link para falar com um atendente da escola via whatsapp:\n[https://wa.me/${number}](https://wa.me/${number})` 
+                    ? `Clique nesse link para falar com um atendente da escola via whatsapp:\n[Abrir WhatsApp](https://wa.me/${number})` 
                     : `Desculpe, o número de atendimento não está configurado.`;
                 const greeting = await getGreetingMessage(session.hash, session.student ? session.student.id : null, session.student ? session.student.nome : null);
                 return res.json({
