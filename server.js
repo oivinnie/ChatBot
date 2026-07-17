@@ -2432,6 +2432,33 @@ const isInitializingWhatsApp = {}; // hash -> boolean
 const whatsappManualInitRequested = {}; // hash -> boolean
 const lastManualMessageTime = {}; // recipientId -> timestamp
 const sendingAutomatedFor = new Set(); // recipientId
+const clientInitTime = {}; // hash -> timestamp (para reinício programado)
+
+// Rotina preventiva: reinicia clientes ativos há mais de 24 horas durante a madrugada (limpeza de memória do Puppeteer)
+setInterval(async () => {
+    const now = Date.now();
+    const activeHashes = Object.keys(whatsappClients);
+    for (const hash of activeHashes) {
+        const initTime = clientInitTime[hash];
+        if (initTime && (now - initTime > 24 * 60 * 60 * 1000)) {
+            // Executa o reinício apenas na madrugada (entre 1h e 5h) para não impactar atendimentos
+            const currentHour = new Date().getHours();
+            if (currentHour >= 1 && currentHour <= 5) {
+                console.log(`[WhatsApp - Cleanup] Cliente ${hash} ativo por mais de 24 horas. Iniciando reinício de manutenção preventiva.`);
+                try {
+                    const config = await ConfigService.getSchoolConfig(hash);
+                    if (config) {
+                        await destroyWhatsAppClient(hash);
+                        await delay(5000);
+                        await initWhatsApp(hash, config);
+                    }
+                } catch (err) {
+                    console.error(`[WhatsApp - Cleanup] Erro no reinício preventivo de ${hash}:`, err.message);
+                }
+            }
+        }
+    }
+}, 60 * 60 * 1000); // Roda a cada hora
 
 // Helper para matar processos zumbis do Chrome/Chromium de forma automatizada
 function killChromiumProcesses() {
@@ -2586,6 +2613,7 @@ async function initWhatsApp(schoolHash, schoolConfig) {
         whatsappQrData[schoolHash] = null;
         isInitializingWhatsApp[schoolHash] = false;
         whatsappManualInitRequested[schoolHash] = false; // Reset da flag de inicialização manual
+        clientInitTime[schoolHash] = Date.now(); // Grava timestamp de conexão pronta
     });
 
     client.on('authenticated', () => {
@@ -2675,6 +2703,29 @@ async function initWhatsApp(schoolHash, schoolConfig) {
                     }
                 } catch (sendErr) {
                     console.error(`[${schoolConfig.nome_fantasia || schoolHash}] Erro crítico ao enviar mensagem de WhatsApp para ${msg.from}:`, sendErr.message);
+                    
+                    // Se o erro indicar que o navegador ou página do Puppeteer caiu, reinicia o cliente automaticamente
+                    const isCrash = sendErr.message && (
+                        sendErr.message.includes('closed') || 
+                        sendErr.message.includes('Protocol error') || 
+                        sendErr.message.includes('Navigation failed') ||
+                        sendErr.message.includes('Target closed') ||
+                        sendErr.message.includes('destroyed')
+                    );
+                    if (isCrash) {
+                        console.warn(`[WhatsApp - ${schoolHash}] Falha crítica de comunicação com o navegador detectada! Tentando reestabelecer o serviço...`);
+                        setTimeout(async () => {
+                            try {
+                                await destroyWhatsAppClient(schoolHash);
+                                const freshConfig = await ConfigService.getSchoolConfig(schoolHash);
+                                if (freshConfig) {
+                                    await initWhatsApp(schoolHash, freshConfig);
+                                }
+                            } catch (reconErr) {
+                                console.error(`[WhatsApp - ${schoolHash}] Erro ao tentar reinicializar cliente após crash do Puppeteer:`, reconErr.message);
+                            }
+                        }, 5000);
+                    }
                 } finally {
                     setTimeout(() => {
                         sendingAutomatedFor.delete(msg.from);
