@@ -2649,26 +2649,32 @@ async function initWhatsApp(schoolHash, schoolConfig) {
             if (result && result.response) {
                 sendingAutomatedFor.add(msg.from);
                 try {
-                    const chat = await msg.getChat();
-                    // Marca como visto (blue ticks)
-                    await chat.sendSeen();
-                    // Simula digitando
-                    await chat.sendStateTyping();
-                    
-                    // Tempo de espera aleatório (entre 1.5 e 4 segundos) proporcional ao tamanho do texto
-                    const textLength = result.response.length;
-                    const waitTime = Math.min(1500 + (textLength * 4) + (Math.random() * 1000), 4000);
-                    await delay(waitTime);
-                    
-                    await msg.reply(result.response);
-                    await chat.clearState();
-                } catch (chatErr) {
-                    console.warn(`[${schoolConfig.nome_fantasia || schoolHash}] Aviso: Simulação de digitação indisponível (${chatErr.message || chatErr})`);
-                    try {
-                        await msg.reply(result.response);
-                    } catch (replyErr) {
-                        console.error('Erro de fallback no reply:', replyErr);
+                    const isLid = msg.from.endsWith('@lid');
+                    if (isLid) {
+                        // Envia direto para contatos @lid para evitar falhas do Puppeteer/getChat
+                        await client.sendMessage(msg.from, result.response);
+                    } else {
+                        try {
+                            const chat = await msg.getChat();
+                            // Marca como visto (blue ticks)
+                            await chat.sendSeen();
+                            // Simula digitando
+                            await chat.sendStateTyping();
+                            
+                            // Tempo de espera aleatório (entre 1.5 e 4 segundos) proporcional ao tamanho do texto
+                            const textLength = result.response.length;
+                            const waitTime = Math.min(1500 + (textLength * 4) + (Math.random() * 1000), 4000);
+                            await delay(waitTime);
+                            
+                            await client.sendMessage(msg.from, result.response);
+                            await chat.clearState();
+                        } catch (chatErr) {
+                            console.warn(`[${schoolConfig.nome_fantasia || schoolHash}] Aviso: Simulação de digitação indisponível para ${msg.from} (${chatErr.message || chatErr})`);
+                            await client.sendMessage(msg.from, result.response);
+                        }
                     }
+                } catch (sendErr) {
+                    console.error(`[${schoolConfig.nome_fantasia || schoolHash}] Erro crítico ao enviar mensagem de WhatsApp para ${msg.from}:`, sendErr.message);
                 } finally {
                     setTimeout(() => {
                         sendingAutomatedFor.delete(msg.from);
