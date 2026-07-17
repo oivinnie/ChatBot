@@ -2642,16 +2642,26 @@ async function initWhatsApp(schoolHash, schoolConfig) {
     });
 
     client.on('disconnected', async (reason) => {
-        console.log(`[${schoolConfig.nome_fantasia || schoolHash}] WhatsApp Client desconectado:`, reason);
+        console.log(`[${schoolConfig.nome_fantasia || schoolHash}] WhatsApp Client desconectado inesperadamente:`, reason);
         whatsappStatuses[schoolHash] = 'DISCONNECTED';
         whatsappQrData[schoolHash] = null;
         isInitializingWhatsApp[schoolHash] = true;
+        
         await destroyWhatsAppClient(schoolHash);
+        
+        // Auto-reconexão para desconexões inesperadas (como quedas de rede ou reinício de processos Chromium)
+        console.warn(`[WhatsApp - ${schoolHash}] Tentando auto-reconexão automática em 10 segundos...`);
         setTimeout(async () => {
-            await cleanSessionFolder(schoolHash);
             isInitializingWhatsApp[schoolHash] = false;
-            // Não reinicializa automaticamente; aguarda o usuário clicar em "Ativar"
-        }, 1500);
+            try {
+                const freshConfig = await ConfigService.getSchoolConfig(schoolHash);
+                if (freshConfig) {
+                    await initWhatsApp(schoolHash, freshConfig);
+                }
+            } catch (reconErr) {
+                console.error(`[WhatsApp - ${schoolHash}] Falha ao tentar auto-reconexão após queda de conexão:`, reconErr.message);
+            }
+        }, 10000); // Aguarda 10 segundos para restabelecer
     });
 
     client.on('message_create', async (msg) => {
