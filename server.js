@@ -2577,7 +2577,11 @@ async function initWhatsApp(schoolHash, schoolConfig) {
                 '--disable-default-apps',
                 '--mute-audio',
                 '--no-default-browser-check',
-                '--disable-web-security'
+                '--disable-web-security',
+                '--disable-renderer-backgrounding',
+                '--disable-background-timer-throttling',
+                '--disable-backgrounding-occluded-windows',
+                '--disable-features=CalculateWindowOcclusionForOccludedWindows'
             ]
         }
     });
