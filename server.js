@@ -812,8 +812,8 @@ async function processPlataforma(hash, session, studentId, studentName) {
             
             const matricula = session.student.matricula ? session.student.matricula.trim() : 'Não cadastrada';
             
-            let response = `Aqui estão as credenciais para acesso ao seu Portal do Aluno DKSOFT, **${studentName}**:\n\n`;
-            response += `💻 **Portal do Aluno DKSOFT**\n`;
+            let response = `Use os dados abaixo para acessar o Portal do Aluno, **${studentName}**:\n\n`;
+            response += `💻 **Portal do Aluno**\n`;
             response += `🔗 Link: **[${portalUrl.replace(/^https?:\/\//i, '')}](${portalUrl})**\n`;
             response += `👤 Login: \`${matricula}\`\n`;
             response += `🔑 Senha: \`Ano do seu nascimento\`\n\n`;
@@ -1026,8 +1026,12 @@ async function chatHandler(req, res) {
     }
 
     const session = sessions[sessionId];
-    if (hash && !session.hash) {
+    if (hash && session.hash !== hash) {
         session.hash = hash;
+        session.student = null;
+        session.students = [];
+        session.step = 'WELCOME';
+        session.intent = null;
     }
 
     const text = message.trim();
@@ -2023,6 +2027,8 @@ app.post('/api/escola/validar', async (req, res) => {
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
 
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
 const whatsappClients = {};
 const whatsappStatuses = {}; // hash -> status
 const whatsappQrData = {}; // hash -> qrData
@@ -2244,13 +2250,34 @@ async function initWhatsApp(schoolHash, schoolConfig) {
             
             const result = await processChatMessage(msg.from, messageToSend, schoolHash);
             
-            sendingAutomatedFor.add(msg.from);
-            try {
-                await msg.reply(result.response);
-            } finally {
-                setTimeout(() => {
-                    sendingAutomatedFor.delete(msg.from);
-                }, 2000);
+            if (result && result.response) {
+                sendingAutomatedFor.add(msg.from);
+                try {
+                    const chat = await msg.getChat();
+                    // Marca como visto (blue ticks)
+                    await chat.sendSeen();
+                    // Simula digitando
+                    await chat.sendStateTyping();
+                    
+                    // Tempo de espera aleatório (entre 1.5 e 4 segundos) proporcional ao tamanho do texto
+                    const textLength = result.response.length;
+                    const waitTime = Math.min(1500 + (textLength * 4) + (Math.random() * 1000), 4000);
+                    await delay(waitTime);
+                    
+                    await msg.reply(result.response);
+                    await chat.clearState();
+                } catch (chatErr) {
+                    console.error(`[${schoolConfig.nome_fantasia || schoolHash}] Erro ao enviar resposta com simulação typing:`, chatErr);
+                    try {
+                        await msg.reply(result.response);
+                    } catch (replyErr) {
+                        console.error('Erro de fallback no reply:', replyErr);
+                    }
+                } finally {
+                    setTimeout(() => {
+                        sendingAutomatedFor.delete(msg.from);
+                    }, 2000);
+                }
             }
         } catch (err) {
             console.error(`[${schoolConfig.nome_fantasia || schoolHash}] Erro ao processar mensagem do WhatsApp:`, err);
