@@ -1933,7 +1933,7 @@ app.get('/api/admin/franquias', requireAdminAuth, async (req, res) => {
             SELECT f.id, f.nome, f.dia_vencimento, f.created_at, COUNT(e.id_atendimento) AS total_escolas
             FROM franquias f
             LEFT JOIN escola_configs e ON e.franquia_id = f.id
-            GROUP BY f.id
+            GROUP BY f.id, f.nome, f.dia_vencimento, f.created_at
             ORDER BY f.nome ASC
         `);
         res.json(rows);
