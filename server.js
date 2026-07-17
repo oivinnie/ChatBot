@@ -2698,30 +2698,8 @@ async function initWhatsApp(schoolHash, schoolConfig) {
             if (result && result.response) {
                 sendingAutomatedFor.add(msg.from);
                 try {
-                    const isLid = msg.from.endsWith('@lid');
-                    if (isLid) {
-                        // Envia direto para contatos @lid para evitar falhas do Puppeteer/getChat
-                        await client.sendMessage(msg.from, result.response);
-                    } else {
-                        try {
-                            const chat = await msg.getChat();
-                            // Marca como visto (blue ticks)
-                            await chat.sendSeen();
-                            // Simula digitando
-                            await chat.sendStateTyping();
-                            
-                            // Tempo de espera reduzido para respostas rápidas (máximo 800ms)
-                            const textLength = result.response.length;
-                            const waitTime = Math.min(200 + (textLength * 1) + (Math.random() * 200), 800);
-                            await delay(waitTime);
-                            
-                            await client.sendMessage(msg.from, result.response);
-                            await chat.clearState();
-                        } catch (chatErr) {
-                            console.warn(`[${schoolConfig.nome_fantasia || schoolHash}] Aviso: Simulação de digitação indisponível para ${msg.from} (${chatErr.message || chatErr})`);
-                            await client.sendMessage(msg.from, result.response);
-                        }
-                    }
+                    // Envia a resposta instantaneamente para todos os contatos, eliminando as chamadas lentas do Puppeteer
+                    await client.sendMessage(msg.from, result.response);
                 } catch (sendErr) {
                     console.error(`[${schoolConfig.nome_fantasia || schoolHash}] Erro crítico ao enviar mensagem de WhatsApp para ${msg.from}:`, sendErr.message);
                     
