@@ -4,9 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Administração de Franquias - Chatbot</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="/style.css">
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
     <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            --text-primary: #1f2937;
+            --text-secondary: #4b5563;
+            --bg-color: #f3f4f6;
+        }
+
         body {
             display: flex;
             flex-direction: column;
@@ -33,7 +40,7 @@
 
         .admin-column {
             flex: 1;
-            background: rgba(255, 255, 255, 0.7);
+            background: rgba(255, 255, 255, 0.75);
             border: 1px solid rgba(255, 255, 255, 0.6);
             border-radius: 28px;
             backdrop-filter: blur(24px);
@@ -49,7 +56,7 @@
 
         /* Card de Login */
         .login-card {
-            background: rgba(255, 255, 255, 0.7);
+            background: rgba(255, 255, 255, 0.75);
             border: 1px solid rgba(255, 255, 255, 0.6);
             border-radius: 28px;
             backdrop-filter: blur(24px);
@@ -119,8 +126,8 @@
 
         /* Botões Estilizados */
         .btn-primary {
-            background: var(--primary-gradient);
-            color: #ffffff;
+            background: var(--primary-gradient) !important;
+            color: #ffffff !important;
             border: none;
             padding: 12px 24px;
             border-radius: 12px;
@@ -282,18 +289,22 @@
             <!-- Coluna Esquerda: Cadastro e Lista de Franquias -->
             <div class="admin-column">
                 <h2 style="font-size: 18px; font-weight: 700; margin-bottom: 20px; color: var(--text-primary);" id="formTitle">Criar Nova Franquia</h2>
-                <form id="franchiseForm" onsubmit="handleSaveFranchise(event)" style="margin-bottom: 24px; display: flex; gap: 12px; align-items: flex-end;">
+                <form id="franchiseForm" onsubmit="handleSaveFranchise(event)" style="margin-bottom: 24px; display: flex; flex-direction: column; gap: 16px;">
                     <input type="hidden" id="editFranchiseId">
-                    <div class="form-group" style="flex: 2; margin-bottom: 0;">
+                    <div class="form-group" style="margin-bottom: 0;">
                         <label for="franchiseNameInput">Nome da Franquia</label>
                         <input type="text" id="franchiseNameInput" class="form-input" required placeholder="Ex: DKSOFT Franchising">
                     </div>
-                    <div class="form-group" style="flex: 1; margin-bottom: 0; min-width: 100px;">
+                    <div class="form-group" style="margin-bottom: 0;">
                         <label for="franchiseDueDayInput">Dia Vencimento</label>
                         <input type="number" id="franchiseDueDayInput" class="form-input" min="1" max="31" placeholder="Ex: 15">
                     </div>
-                    <button type="submit" id="franchiseSaveBtn" class="btn-primary">Salvar</button>
-                    <button type="button" onclick="resetFranchiseForm()" id="cancelEditBtn" class="btn-action btn-edit" style="display: none; padding: 12px;">Cancelar</button>
+                    <div style="display: flex; gap: 12px; margin-top: 8px;">
+                        <button type="submit" id="franchiseSaveBtn" class="btn-primary" style="flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px;">
+                            <span>💾 Salvar Franquia</span>
+                        </button>
+                        <button type="button" onclick="resetFranchiseForm()" id="cancelEditBtn" class="btn-action btn-edit" style="display: none; padding: 12px 20px; font-size: 14px; border-radius: 12px; margin-right: 0;">Cancelar</button>
+                    </div>
                 </form>
 
                 <hr>
