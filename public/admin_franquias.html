@@ -439,11 +439,16 @@
                 });
                 if (response.status === 401) return handleLogout();
                 
-                franchises = await response.json();
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.message || 'Erro no servidor');
+                }
+                
+                franchises = data;
                 renderFranchises();
             } catch (err) {
                 console.error(err);
-                showToast('Erro ao carregar franquias.', true);
+                showToast(`Erro ao carregar franquias: ${err.message}`, true);
             }
         }
 
@@ -479,11 +484,15 @@
                 });
                 if (response.status === 401) return handleLogout();
                 
-                const schools = await response.json();
-                renderSchools(schools);
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.message || 'Erro no servidor');
+                }
+                
+                renderSchools(data);
             } catch (err) {
                 console.error(err);
-                showToast('Erro ao carregar escolas.', true);
+                showToast(`Erro ao carregar escolas: ${err.message}`, true);
             }
         }
 
