@@ -154,22 +154,33 @@ async function getSchoolConfig(idOrHash) {
     let rows;
     
     // Busca por id_atendimento ou por hash com LEFT JOIN em franquias (incluindo dia_vencimento)
-    if (/^\d+$/.test(strKey)) {
-        const [r] = await pool.execute(`
-            SELECT ec.*, f.nome AS nome_franquia, f.dia_vencimento AS dia_vencimento_franquia
-            FROM escola_configs ec
-            LEFT JOIN franquias f ON ec.franquia_id = f.id
-            WHERE ec.id_atendimento = ?
-        `, [parseInt(strKey)]);
-        rows = r;
-    } else {
-        const [r] = await pool.execute(`
-            SELECT ec.*, f.nome AS nome_franquia, f.dia_vencimento AS dia_vencimento_franquia
-            FROM escola_configs ec
-            LEFT JOIN franquias f ON ec.franquia_id = f.id
-            WHERE ec.hash = ?
-        `, [strKey]);
-        rows = r;
+    try {
+        if (/^\d+$/.test(strKey)) {
+            const [r] = await pool.execute(`
+                SELECT ec.*, f.nome AS nome_franquia, f.dia_vencimento AS dia_vencimento_franquia
+                FROM escola_configs ec
+                LEFT JOIN franquias f ON ec.franquia_id = f.id
+                WHERE ec.id_atendimento = ?
+            `, [parseInt(strKey)]);
+            rows = r;
+        } else {
+            const [r] = await pool.execute(`
+                SELECT ec.*, f.nome AS nome_franquia, f.dia_vencimento AS dia_vencimento_franquia
+                FROM escola_configs ec
+                LEFT JOIN franquias f ON ec.franquia_id = f.id
+                WHERE ec.hash = ?
+            `, [strKey]);
+            rows = r;
+        }
+    } catch (joinErr) {
+        console.warn('[ConfigService] Tabela franquias não cadastrada ou indisponível, usando fallback de busca simples:', joinErr.message);
+        if (/^\d+$/.test(strKey)) {
+            const [r] = await pool.execute('SELECT * FROM escola_configs WHERE id_atendimento = ?', [parseInt(strKey)]);
+            rows = r;
+        } else {
+            const [r] = await pool.execute('SELECT * FROM escola_configs WHERE hash = ?', [strKey]);
+            rows = r;
+        }
     }
 
     if (!rows || rows.length === 0) {

@@ -7,60 +7,171 @@
     <link rel="stylesheet" href="style.css">
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
     <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            padding: 40px 20px;
+            min-height: 100vh;
+        }
+
+        /* Layout Admin */
         .admin-layout {
             display: flex;
-            gap: 24px;
+            gap: 28px;
             width: 100%;
             max-width: 1200px;
             margin: 0 auto;
             align-items: flex-start;
         }
+        @media (max-width: 900px) {
+            .admin-layout {
+                flex-direction: column;
+            }
+        }
+
         .admin-column {
             flex: 1;
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 24px;
-            backdrop-filter: var(--glass-blur);
-            -webkit-backdrop-filter: var(--glass-blur);
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.08);
-            padding: 24px;
+            background: rgba(255, 255, 255, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            border-radius: 28px;
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.04);
+            padding: 30px;
             min-height: 500px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
+        .admin-column:hover {
+            box-shadow: 0 30px 60px rgba(79, 70, 229, 0.06);
+        }
+
+        /* Card de Login */
         .login-card {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 24px;
-            backdrop-filter: var(--glass-blur);
-            -webkit-backdrop-filter: var(--glass-blur);
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.08);
+            background: rgba(255, 255, 255, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            border-radius: 28px;
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.06);
             padding: 40px;
             width: 100%;
-            max-width: 400px;
+            max-width: 440px;
             text-align: center;
+            margin-top: 80px;
+            transition: transform 0.3s ease;
         }
-        .toast {
-            position: fixed;
-            bottom: 24px;
-            right: 24px;
-            background: #10b981;
+
+        /* inputs com estilo moderno */
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            background: rgba(255, 255, 255, 0.8);
+            outline: none;
+            font-family: inherit;
+            color: var(--text-primary);
+            font-size: 14px;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.01);
+            transition: all 0.3s ease;
+        }
+        .form-input:focus {
+            border-color: #4f46e5;
+            background: #ffffff;
+            box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.12);
+        }
+
+        /* Custom Select */
+        select.admin-select {
+            padding: 10px 14px;
+            border-radius: 12px;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            background: rgba(255, 255, 255, 0.8);
+            width: 100%;
+            outline: none;
+            font-family: inherit;
+            color: var(--text-primary);
+            font-size: 14px;
+            cursor: pointer;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.01);
+            transition: all 0.3s ease;
+        }
+        select.admin-select:focus {
+            border-color: #4f46e5;
+            background: #ffffff;
+            box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.12);
+        }
+
+        /* Botões Estilizados */
+        .btn-primary {
+            background: var(--primary-gradient);
             color: #ffffff;
+            border: none;
             padding: 12px 24px;
             border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(16, 185, 129, 0.3);
-            font-weight: 500;
-            opacity: 0;
-            transform: translateY(20px);
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            box-shadow: 0 8px 20px rgba(99, 102, 241, 0.25);
             transition: all 0.3s ease;
-            z-index: 9999;
         }
-        .toast.show {
-            opacity: 1;
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 25px rgba(99, 102, 241, 0.35);
+        }
+        .btn-primary:active {
             transform: translateY(0);
         }
-        .toast.error {
-            background: #ef4444;
-            box-shadow: 0 10px 25px rgba(239, 68, 68, 0.3);
+
+        .btn-action {
+            padding: 8px 14px;
+            font-size: 12px;
+            border-radius: 10px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            font-weight: 600;
+            margin-right: 4px;
+            transition: all 0.2s ease;
         }
+        .btn-edit {
+            background: rgba(79, 70, 229, 0.08);
+            color: #4f46e5;
+            border-color: rgba(79, 70, 229, 0.15);
+        }
+        .btn-edit:hover {
+            background: #4f46e5;
+            color: #ffffff;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(79, 70, 229, 0.15);
+        }
+        .btn-delete {
+            background: rgba(239, 68, 68, 0.08);
+            color: #ef4444;
+            border-color: rgba(239, 68, 68, 0.15);
+        }
+        .btn-delete:hover {
+            background: #ef4444;
+            color: #ffffff;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(239, 68, 68, 0.15);
+        }
+
+        /* Tabelas */
         table {
             width: 100%;
             border-collapse: collapse;
@@ -68,115 +179,92 @@
         }
         th, td {
             text-align: left;
-            padding: 12px 16px;
-            border-bottom: 1px solid var(--border-color);
+            padding: 14px 16px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+            font-size: 14px;
         }
         th {
-            font-weight: 600;
+            font-weight: 700;
             color: var(--text-secondary);
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 0.8px;
+            background: rgba(0, 0, 0, 0.02);
         }
-        .btn-action {
-            padding: 6px 12px;
-            font-size: 12px;
-            border-radius: 8px;
-            cursor: pointer;
-            border: 1px solid transparent;
-            font-weight: 500;
-            margin-right: 4px;
-            transition: all 0.2s ease;
+        tbody tr {
+            transition: background 0.2s ease;
         }
-        .btn-edit {
-            background: rgba(79, 70, 229, 0.1);
-            color: #4f46e5;
-            border-color: rgba(79, 70, 229, 0.2);
+        tbody tr:hover {
+            background: rgba(79, 70, 229, 0.03);
         }
-        .btn-edit:hover {
-            background: #4f46e5;
-            color: #ffffff;
-        }
-        .btn-delete {
-            background: rgba(239, 68, 68, 0.1);
-            color: #ef4444;
-            border-color: rgba(239, 68, 68, 0.2);
-        }
-        .btn-delete:hover {
-            background: #ef4444;
-            color: #ffffff;
-        }
-        select.admin-select {
-            padding: 8px 12px;
-            border-radius: 10px;
-            border: 1px solid var(--border-color);
-            background: #ffffff;
-            width: 100%;
-            outline: none;
-            font-family: inherit;
-            color: var(--text-primary);
-            cursor: pointer;
-        }
-        .form-group {
-            margin-bottom: 16px;
-            text-align: left;
-        }
-        .form-group label {
-            display: block;
-            font-size: 12px;
-            font-weight: 500;
-            color: var(--text-secondary);
-            margin-bottom: 6px;
-        }
-        .form-input {
-            width: 100%;
-            padding: 10px 14px;
-            border-radius: 10px;
-            border: 1px solid var(--border-color);
-            outline: none;
-            font-family: inherit;
-        }
-        .form-input:focus {
-            border-color: #4f46e5;
-        }
+
+        /* Header do Painel */
         .header-section {
             width: 100%;
             max-width: 1200px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin: 0 auto 24px auto;
+            margin: 0 auto 30px auto;
+            background: rgba(255, 255, 255, 0.4);
+            padding: 20px 30px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            backdrop-filter: blur(10px);
         }
-        .btn-primary {
-            background: var(--primary-gradient);
+
+        /* Toast Popup */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: rgba(16, 185, 129, 0.95);
+            backdrop-filter: blur(10px);
             color: #ffffff;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 10px;
-            cursor: pointer;
-            font-weight: 500;
-            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.25);
+            padding: 14px 28px;
+            border-radius: 16px;
+            box-shadow: 0 15px 30px rgba(16, 185, 129, 0.25);
+            font-weight: 600;
+            font-size: 14px;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 9999;
         }
-        .btn-primary:hover {
-            opacity: 0.9;
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .toast.error {
+            background: rgba(239, 68, 68, 0.95);
+            box-shadow: 0 15px 30px rgba(239, 68, 68, 0.25);
+        }
+
+        hr {
+            border: 0;
+            border-top: 1px solid rgba(0, 0, 0, 0.05);
+            margin: 20px 0;
         }
     </style>
 </head>
-<body style="padding: 40px 20px; flex-direction: column; justify-content: flex-start;">
+<body>
 
     <!-- TELA DE LOGIN -->
     <div id="loginContainer" class="login-card">
-        <img src="https://www.dksoft.com.br/images/logo.png" alt="DKSoft Logo" style="width: 140px; margin-bottom: 16px;">
-        <h2 style="font-size: 20px; margin-bottom: 8px;">Acesso de Suporte</h2>
-        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 24px;">Área restrita para gerenciamento de franquias.</p>
+        <div style="background: var(--primary-gradient); width: 64px; height: 64px; border-radius: 20px; display: inline-flex; align-items: center; justify-content: center; font-size: 32px; margin-bottom: 20px; box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);">💼</div>
+        <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 8px;">Acesso de Suporte</h2>
+        <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 28px;">Área restrita para gerenciamento de franquias.</p>
         
         <form id="adminLoginForm" onsubmit="handleLogin(event)">
             <div class="form-group">
                 <label for="adminCodeInput">Código de Acesso</label>
-                <input type="text" id="adminCodeInput" class="form-input" required placeholder="Digite o código">
+                <input type="text" id="adminCodeInput" class="form-input" required placeholder="Código administrativo">
             </div>
-            <div class="form-group" style="margin-bottom: 24px;">
+            <div class="form-group" style="margin-bottom: 28px;">
                 <label for="adminPasswordInput">Senha</label>
-                <input type="password" id="adminPasswordInput" class="form-input" required placeholder="Digite a senha">
+                <input type="password" id="adminPasswordInput" class="form-input" required placeholder="Senha de segurança">
             </div>
-            <button type="submit" id="loginBtn" class="btn-primary" style="width: 100%;">🚪 Entrar</button>
+            <button type="submit" id="loginBtn" class="btn-primary" style="width: 100%;">🚪 Entrar no Painel</button>
         </form>
     </div>
 
@@ -187,13 +275,13 @@
                 <h1 style="font-size: 24px; font-weight: 700; color: var(--text-primary);">Administração de Franquias</h1>
                 <p style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">Associe escolas e gerencie as marcas de franquias do chatbot.</p>
             </div>
-            <button onclick="handleLogout()" id="logoutBtn" class="btn-action btn-delete" style="padding: 10px 16px; font-size: 14px;">🚪 Sair</button>
+            <button onclick="handleLogout()" id="logoutBtn" class="btn-action btn-delete" style="padding: 10px 20px; font-size: 14px;">🚪 Sair</button>
         </div>
 
         <div class="admin-layout">
             <!-- Coluna Esquerda: Cadastro e Lista de Franquias -->
             <div class="admin-column">
-                <h2 style="font-size: 18px; margin-bottom: 16px;" id="formTitle">Criar Nova Franquia</h2>
+                <h2 style="font-size: 18px; font-weight: 700; margin-bottom: 20px; color: var(--text-primary);" id="formTitle">Criar Nova Franquia</h2>
                 <form id="franchiseForm" onsubmit="handleSaveFranchise(event)" style="margin-bottom: 24px; display: flex; gap: 12px; align-items: flex-end;">
                     <input type="hidden" id="editFranchiseId">
                     <div class="form-group" style="flex: 2; margin-bottom: 0;">
@@ -205,12 +293,12 @@
                         <input type="number" id="franchiseDueDayInput" class="form-input" min="1" max="31" placeholder="Ex: 15">
                     </div>
                     <button type="submit" id="franchiseSaveBtn" class="btn-primary">Salvar</button>
-                    <button type="button" onclick="resetFranchiseForm()" id="cancelEditBtn" class="btn-action" style="display: none; padding: 10px;">Cancelar</button>
+                    <button type="button" onclick="resetFranchiseForm()" id="cancelEditBtn" class="btn-action btn-edit" style="display: none; padding: 12px;">Cancelar</button>
                 </form>
 
-                <hr style="border: 0; border-top: 1px solid var(--border-color); margin-bottom: 16px;">
+                <hr>
 
-                <h3 style="font-size: 16px; margin-bottom: 12px;">Franquias Cadastradas</h3>
+                <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 12px; color: var(--text-primary);">Franquias Cadastradas</h3>
                 <div style="overflow-x: auto;">
                     <table>
                         <thead>
@@ -231,8 +319,8 @@
 
             <!-- Coluna Direita: Mapeamento de Escolas -->
             <div class="admin-column">
-                <h2 style="font-size: 18px; margin-bottom: 16px;">Associação de Escolas</h2>
-                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">Selecione a franquia correspondente para cada unidade escolar cadastrada.</p>
+                <h2 style="font-size: 18px; font-weight: 700; margin-bottom: 8px; color: var(--text-primary);">Associação de Escolas</h2>
+                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 20px;">Selecione a franquia correspondente para cada unidade escolar cadastrada.</p>
                 
                 <div style="overflow-x: auto;">
                     <table>
@@ -362,7 +450,7 @@
                 tr.innerHTML = `
                     <td>${f.id}</td>
                     <td><strong>${escapeHtml(f.nome)}</strong></td>
-                    <td style="text-align: center;">${f.dia_vencimento || '-'}</td>
+                    <td style="text-align: center; font-weight: 600; color: #4f46e5;">${f.dia_vencimento || '-'}</td>
                     <td style="text-align: center;">${f.total_escolas}</td>
                     <td style="text-align: center;">
                         <button class="btn-action btn-edit" onclick="editFranchise(${f.id}, '${escapeQuote(f.nome)}', ${f.dia_vencimento || 'null'})">Editar</button>
