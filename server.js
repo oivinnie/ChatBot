@@ -2706,9 +2706,9 @@ async function initWhatsApp(schoolHash, schoolConfig) {
                             // Simula digitando
                             await chat.sendStateTyping();
                             
-                            // Tempo de espera aleatório (entre 1.5 e 4 segundos) proporcional ao tamanho do texto
+                            // Tempo de espera reduzido para respostas rápidas (máximo 800ms)
                             const textLength = result.response.length;
-                            const waitTime = Math.min(1500 + (textLength * 4) + (Math.random() * 1000), 4000);
+                            const waitTime = Math.min(200 + (textLength * 1) + (Math.random() * 200), 800);
                             await delay(waitTime);
                             
                             await client.sendMessage(msg.from, result.response);
