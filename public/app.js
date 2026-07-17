@@ -130,7 +130,9 @@ function appendMessage(sender, text, options = null, isIdentified = false, extra
     }
     
     chatLog.appendChild(messageDiv);
-    chatLog.scrollTop = 0;
+    setTimeout(() => {
+        chatLog.scrollTop = messageDiv.offsetTop - chatLog.offsetTop;
+    }, 50);
 }
 
 // Mostra o indicador de digitação do Bot
@@ -151,7 +153,9 @@ function showTypingIndicator() {
     
     typingIndicator.appendChild(indicatorContent);
     chatLog.appendChild(typingIndicator);
-    chatLog.scrollTop = 0;
+    setTimeout(() => {
+        chatLog.scrollTop = typingIndicator.offsetTop - chatLog.offsetTop;
+    }, 50);
 }
 
 // Remove o indicador de digitação do Bot
