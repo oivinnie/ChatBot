@@ -61,14 +61,15 @@ function decrypt(text) {
 function getCentralPool() {
     if (!centralPool) {
         centralPool = mysql.createPool({
-            host: process.env.CENTRAL_DB_HOST || 'localhost',
-            port: parseInt(process.env.CENTRAL_DB_PORT) || 3306,
+            host: process.env.CENTRAL_DB_HOST || 'node270594-chatbot.sp1.br.saveincloud.net.br',
             user: process.env.CENTRAL_DB_USER || 'root',
-            password: process.env.CENTRAL_DB_PASSWORD || '',
-            database: process.env.CENTRAL_DB_NAME || 'chatbot_central',
+            password: process.env.CENTRAL_DB_PASSWORD || 'OEBzda28990',
+            database: process.env.CENTRAL_DB_NAME || 'central_chatbot',
             waitForConnections: true,
             connectionLimit: 10,
-            queueLimit: 0
+            queueLimit: 0,
+            connectTimeout: 4000,
+            acquireTimeout: 4000
         });
     }
     return centralPool;
@@ -83,7 +84,9 @@ function getDksoftPool() {
             database: process.env.DKSOFT_DB_NAME || 'dksoft19',
             waitForConnections: true,
             connectionLimit: 10,
-            queueLimit: 0
+            queueLimit: 0,
+            connectTimeout: 4000,
+            acquireTimeout: 4000
         });
     }
     return dksoftPool;
