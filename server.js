@@ -1102,8 +1102,30 @@ async function chatHandler(req, res) {
     const text = message.trim();
     const cleanText = text.toLowerCase();
 
-    // Comando global para reiniciar / sair
-    if (cleanText === 'sair' || cleanText === 'limpar' || cleanText === 'novo' || cleanText === 'menu') {
+    // Comando global: 'menu' (volta ao menu principal mantendo a identificação do aluno)
+    if (cleanText === 'menu') {
+        session.step = 'WELCOME';
+        session.intent = null;
+        session.students = [];
+        delete session.matchingStudents;
+        delete session.matchingSchools;
+        
+        const targetHash = session.targetSchoolHash || session.hash;
+        const studentId = session.student ? session.student.id : null;
+        const studentNome = session.student ? session.student.nome : null;
+        const greeting = await getGreetingMessage(targetHash, studentId, studentNome);
+        
+        return res.json({ 
+            response: greeting.responseText,
+            options: greeting.options,
+            isIdentified: !!session.student
+        });
+    }
+
+    // Comando global: 'sair', 'limpar', 'novo' (desloga o aluno e se despede)
+    if (cleanText === 'sair' || cleanText === 'limpar' || cleanText === 'novo') {
+        const studentNome = session.student ? session.student.nome : '';
+        
         session.step = 'WELCOME';
         session.intent = null;
         session.students = [];
@@ -1111,9 +1133,24 @@ async function chatHandler(req, res) {
         delete session.targetSchoolHash;
         delete session.matchingStudents;
         delete session.matchingSchools;
+        
+        let schoolEmoji = '🤖';
+        try {
+            const config = await ConfigService.getSchoolConfig(session.hash);
+            if (config && config.emoji) {
+                schoolEmoji = config.emoji;
+            }
+        } catch (errEmoji) {
+            console.error('Erro ao buscar emoji da escola para despedida:', errEmoji);
+        }
+        
+        const goodbyeText = studentNome 
+            ? `👋 Até logo **${studentNome}**, se precisar de algo é só me mandar mensagem! ${schoolEmoji}`
+            : `👋 Até logo, se precisar de algo é só me mandar mensagem! ${schoolEmoji}`;
+            
         const greeting = await getGreetingMessage(session.hash);
         return res.json({ 
-            response: greeting.responseText,
+            response: goodbyeText,
             options: greeting.options,
             isIdentified: false
         });
@@ -1143,9 +1180,36 @@ async function chatHandler(req, res) {
         }
         
         // Se escolheu Sair (por índice correspondente ou por palavra-chave)
-        if (cleanText === indexSair || cleanText === 'sair' || cleanText === 'limpar' || cleanText === 'novo' || cleanText === 'menu') {
+        if (cleanText === indexSair || cleanText === 'sair' || cleanText === 'limpar' || cleanText === 'novo') {
             session.step = 'WELCOME';
             session.student = null;
+            delete session.targetSchoolHash;
+            delete session.matchingStudents;
+            delete session.matchingSchools;
+            
+            let schoolEmoji = '🤖';
+            try {
+                const config = await ConfigService.getSchoolConfig(session.hash);
+                if (config && config.emoji) {
+                    schoolEmoji = config.emoji;
+                }
+            } catch (errEmoji) {}
+            
+            const goodbyeText = `👋 Até logo, se precisar de algo é só me mandar mensagem! ${schoolEmoji}`;
+            const greeting = await getGreetingMessage(session.hash, null, null);
+            return res.json({
+                response: goodbyeText,
+                options: greeting.options,
+                isIdentified: false
+            });
+        }
+        
+        if (cleanText === 'menu') {
+            session.step = 'WELCOME';
+            session.student = null;
+            delete session.targetSchoolHash;
+            delete session.matchingStudents;
+            delete session.matchingSchools;
             const greeting = await getGreetingMessage(session.hash, null, null);
             return res.json({
                 response: greeting.responseText,
@@ -1183,9 +1247,36 @@ async function chatHandler(req, res) {
         }
         
         // Se escolheu Sair (por índice correspondente ou por palavra-chave)
-        if (cleanText === indexSair || cleanText === 'sair' || cleanText === 'limpar' || cleanText === 'novo' || cleanText === 'menu') {
+        if (cleanText === indexSair || cleanText === 'sair' || cleanText === 'limpar' || cleanText === 'novo') {
             session.step = 'WELCOME';
             session.student = null;
+            delete session.targetSchoolHash;
+            delete session.matchingStudents;
+            delete session.matchingSchools;
+            
+            let schoolEmoji = '🤖';
+            try {
+                const config = await ConfigService.getSchoolConfig(session.hash);
+                if (config && config.emoji) {
+                    schoolEmoji = config.emoji;
+                }
+            } catch (errEmoji) {}
+            
+            const goodbyeText = `👋 Até logo, se precisar de algo é só me mandar mensagem! ${schoolEmoji}`;
+            const greeting = await getGreetingMessage(session.hash, null, null);
+            return res.json({
+                response: goodbyeText,
+                options: greeting.options,
+                isIdentified: false
+            });
+        }
+
+        if (cleanText === 'menu') {
+            session.step = 'WELCOME';
+            session.student = null;
+            delete session.targetSchoolHash;
+            delete session.matchingStudents;
+            delete session.matchingSchools;
             const greeting = await getGreetingMessage(session.hash, null, null);
             return res.json({
                 response: greeting.responseText,
