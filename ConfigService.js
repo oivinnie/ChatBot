@@ -680,6 +680,7 @@ module.exports = {
     invalidateCache,
     getAllSchools,
     getDksoftPool,
+    getCentralPool,
     updateSchoolPaymentInfo,
     syncSchoolPayment,
     checkAndSyncSchoolPaymentOnDemand,
