@@ -379,9 +379,9 @@ async function getGreetingMessage(hash, studentId = null, studentName = null) {
     });
 
     if (studentId && studentName) {
-        response += `\nDigite a opção desejada, **menu** para o menu principal ou **Sair** para trocar de aluno.`;
+        response += `\nDigite a opção desejada ou **Sair** para trocar de aluno.`;
     } else {
-        response += `\nDigite a opção desejada ou **menu** para voltar ao menu principal👇`;
+        response += `\nDigite a opção desejada👇`;
     }
 
     const extraButtons = [];
@@ -1056,13 +1056,15 @@ async function chatHandler(req, res) {
     res.json = function(data) {
         session.isProcessing = false;
         if (data && typeof data.response === 'string' && data.response.trim()) {
-            const isIdentificationStep = [
+            const noFooterSteps = [
+                'WELCOME',
                 'AWAITING_IDENTIFICATION',
                 'AWAITING_STUDENT_SELECTION',
                 'AWAITING_UNIT_SELECTION'
-            ].includes(session.step);
+            ];
+            const isNoFooterStep = noFooterSteps.includes(session.step);
 
-            if (!isIdentificationStep && !/\bmenu\b/i.test(data.response)) {
+            if (!isNoFooterStep && !/\bmenu\b/i.test(data.response)) {
                 data.response = `${data.response.trim()}\n\n💡 *Digite "menu" a qualquer momento para voltar ao menu principal.*`;
             }
         }
@@ -2549,44 +2551,70 @@ const qrcode = require('qrcode');
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-// Helper com timeout robusto para envio de mensagem via WhatsApp (suporta client ou objeto msg de resposta)
-async function safeSendMessage(clientOrMsg, toOrContent, contentOrTimeout = 25000, optionalTimeout = 25000) {
+// Helper com timeout robusto e retry para envio de mensagem via WhatsApp
+async function safeSendMessage(clientOrMsg, toOrContent, contentOrTimeout = 45000, optionalTimeout = 45000) {
     let content;
     let timeoutMs;
-    let sendPromise;
+    let sendPromiseFn;
 
     if (clientOrMsg && typeof clientOrMsg.reply === 'function') {
-        // Uso direto da mensagem recebida (preserva conversas @lid e grupos)
         content = toOrContent;
-        timeoutMs = typeof contentOrTimeout === 'number' ? contentOrTimeout : 25000;
-        sendPromise = (async () => {
+        timeoutMs = typeof contentOrTimeout === 'number' ? contentOrTimeout : 45000;
+        sendPromiseFn = async () => {
             try {
                 return await clientOrMsg.reply(content);
             } catch (errReply) {
                 const chat = await clientOrMsg.getChat();
                 return await chat.sendMessage(content);
             }
-        })();
+        };
     } else {
-        // Uso do cliente com destinatário JID
         const to = toOrContent;
         content = contentOrTimeout;
-        timeoutMs = typeof optionalTimeout === 'number' ? optionalTimeout : 25000;
-        sendPromise = clientOrMsg.sendMessage(to, content);
+        timeoutMs = typeof optionalTimeout === 'number' ? optionalTimeout : 45000;
+        sendPromiseFn = async () => clientOrMsg.sendMessage(to, content);
     }
 
-    let timeoutId;
-    const timeoutPromise = new Promise((_, reject) => {
-        timeoutId = setTimeout(() => {
-            reject(new Error(`Timeout ao enviar mensagem no WhatsApp (${timeoutMs}ms)`));
-        }, timeoutMs);
-    });
+    const executeWithTimeout = async () => {
+        let timeoutId;
+        const timeoutPromise = new Promise((_, reject) => {
+            timeoutId = setTimeout(() => {
+                reject(new Error(`Timeout ao enviar mensagem no WhatsApp (${timeoutMs}ms)`));
+            }, timeoutMs);
+        });
+        try {
+            return await Promise.race([sendPromiseFn(), timeoutPromise]);
+        } finally {
+            clearTimeout(timeoutId);
+        }
+    };
 
     try {
-        return await Promise.race([sendPromise, timeoutPromise]);
-    } finally {
-        clearTimeout(timeoutId);
+        return await executeWithTimeout();
+    } catch (firstErr) {
+        console.warn('[WhatsApp Send] Primeira tentativa falhou, tentando novamente em 1s...', firstErr.message);
+        await delay(1000);
+        return await executeWithTimeout();
     }
+}
+
+// Fila de envio sequencial por escola para evitar colisões no protocolo IPC do Puppeteer
+const sendQueues = {};
+
+function queueSendMessage(schoolHash, fn) {
+    if (!sendQueues[schoolHash]) {
+        sendQueues[schoolHash] = Promise.resolve();
+    }
+    const next = sendQueues[schoolHash].then(async () => {
+        try {
+            return await fn();
+        } catch (err) {
+            throw err;
+        }
+    }).catch(() => {});
+    
+    sendQueues[schoolHash] = next;
+    return next;
 }
 
 const whatsappClients = {};
@@ -2861,8 +2889,8 @@ async function initWhatsApp(schoolHash, schoolConfig) {
             if (result && result.response) {
                 sendingAutomatedFor.add(msg.from);
                 try {
-                    // Responde diretamente no objeto msg (compatível com contatos @lid)
-                    await safeSendMessage(msg, result.response, 25000);
+                    // Envia via fila sequencial com timeout estendido e suporte a contatos @lid
+                    await queueSendMessage(schoolHash, () => safeSendMessage(msg, result.response, 45000));
                 } catch (sendErr) {
                     console.error(`[${schoolConfig.nome_fantasia || schoolHash}] Erro crítico ao enviar mensagem de WhatsApp para ${msg.from}:`, sendErr.message);
                     
