@@ -2545,61 +2545,21 @@ app.post('/api/escola/validar', async (req, res) => {
     }
 });
 
-// --- INTEGRAÇÃO COM WHATSAPP-WEB.JS MULTI-TENANT ---
-const { Client, LocalAuth } = require('whatsapp-web.js');
+// --- INTEGRAÇÃO COM BAILEYS (@whiskeysockets/baileys) MULTI-TENANT ---
+const {
+    default: makeWASocket,
+    useMultiFileAuthState,
+    DisconnectReason,
+    fetchLatestBaileysVersion,
+    makeCacheableSignalKeyStore
+} = require('@whiskeysockets/baileys');
+const pino = require('pino');
 const qrcode = require('qrcode');
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+const logger = pino({ level: 'silent' });
 
-// Helper com timeout robusto e retry para envio de mensagem via WhatsApp
-async function safeSendMessage(clientOrMsg, toOrContent, contentOrTimeout = 15000, optionalTimeout = 15000) {
-    let content;
-    let timeoutMs;
-    let sendPromiseFn;
-
-    if (clientOrMsg && typeof clientOrMsg.getChat === 'function') {
-        content = toOrContent;
-        timeoutMs = typeof contentOrTimeout === 'number' ? contentOrTimeout : 15000;
-        sendPromiseFn = async () => {
-            try {
-                const chat = await clientOrMsg.getChat();
-                return await chat.sendMessage(content);
-            } catch (errChat) {
-                const to = clientOrMsg.from || clientOrMsg.to;
-                return await clientOrMsg.client.sendMessage(to, content);
-            }
-        };
-    } else {
-        const to = toOrContent;
-        content = contentOrTimeout;
-        timeoutMs = typeof optionalTimeout === 'number' ? optionalTimeout : 15000;
-        sendPromiseFn = async () => clientOrMsg.sendMessage(to, content);
-    }
-
-    const executeWithTimeout = async () => {
-        let timeoutId;
-        const timeoutPromise = new Promise((_, reject) => {
-            timeoutId = setTimeout(() => {
-                reject(new Error(`Timeout ao enviar mensagem no WhatsApp (${timeoutMs}ms)`));
-            }, timeoutMs);
-        });
-        try {
-            return await Promise.race([sendPromiseFn(), timeoutPromise]);
-        } finally {
-            clearTimeout(timeoutId);
-        }
-    };
-
-    try {
-        return await executeWithTimeout();
-    } catch (firstErr) {
-        console.warn('[WhatsApp Send] Primeira tentativa falhou, tentando novamente em 1s...', firstErr.message);
-        await delay(1000);
-        return await executeWithTimeout();
-    }
-}
-
-// Fila de envio sequencial por escola para evitar colisões no protocolo IPC do Puppeteer
+// Fila de envio sequencial por escola para garantir ordem nas conversas
 const sendQueues = {};
 
 function queueSendMessage(schoolHash, fn) {
@@ -2625,10 +2585,10 @@ const isInitializingWhatsApp = {}; // hash -> boolean
 const whatsappManualInitRequested = {}; // hash -> boolean
 const lastManualMessageTime = {}; // recipientId -> timestamp
 const sendingAutomatedFor = new Set(); // recipientId
-const clientInitTime = {}; // hash -> timestamp (para reinício programado)
+const clientInitTime = {}; // hash -> timestamp (para estatísticas/manutenção)
 const reconnectTimers = {}; // hash -> timeoutId (gerenciador de reconexão única)
 
-function scheduleAutoReconnect(schoolHash, delayMs = 10000) {
+function scheduleAutoReconnect(schoolHash, delayMs = 5000) {
     if (reconnectTimers[schoolHash]) {
         clearTimeout(reconnectTimers[schoolHash]);
         reconnectTimers[schoolHash] = null;
@@ -2649,68 +2609,24 @@ function scheduleAutoReconnect(schoolHash, delayMs = 10000) {
     }, delayMs);
 }
 
-// Rotina preventiva: reinicia clientes ativos há mais de 24 horas durante a madrugada (limpeza de memória do Puppeteer)
-setInterval(async () => {
-    const now = Date.now();
-    const activeHashes = Object.keys(whatsappClients);
-    for (const hash of activeHashes) {
-        const initTime = clientInitTime[hash];
-        if (initTime && (now - initTime > 24 * 60 * 60 * 1000)) {
-            // Executa o reinício apenas na madrugada (entre 1h e 5h) para não impactar atendimentos
-            const currentHour = new Date().getHours();
-            if (currentHour >= 1 && currentHour <= 5) {
-                console.log(`[WhatsApp - Cleanup] Cliente ${hash} ativo por mais de 24 horas. Iniciando reinício de manutenção preventiva.`);
-                try {
-                    const config = await ConfigService.getSchoolConfig(hash);
-                    if (config) {
-                        await destroyWhatsAppClient(hash);
-                        await delay(5000);
-                        await initWhatsApp(hash, config);
-                    }
-                } catch (err) {
-                    console.error(`[WhatsApp - Cleanup] Erro no reinício preventivo de ${hash}:`, err.message);
-                }
-            }
-        }
-    }
-}, 60 * 60 * 1000); // Roda a cada hora
-
-// Helper para matar processos zumbis do Chrome/Chromium de forma automatizada
-function killChromiumProcesses() {
-    return new Promise((resolve) => {
-        if (process.platform !== 'win32') {
-            exec('pkill -f chrome || true; pkill -f chromium || true', (err) => {
-                // pkill retorna código 1 se nenhum processo for encontrado. Isso é normal e esperado se a memória já estiver limpa.
-                if (err && err.code !== 1) {
-                    console.log(`[Aviso] Limpeza de processos Chromium finalizada (código ${err.code || 'OK'}): sem processos ativos.`);
-                } else {
-                    console.log('Processos Chromium zumbis limpos ou inexistentes.');
-                }
-                resolve();
-            });
-        } else {
-            exec('taskkill /f /im chrome.exe /im chromedriver.exe 2>nul || exit 0', () => {
-                resolve();
-            });
-        }
-    });
-}
-
-// Helper para limpar a pasta da sessão e evitar travamento de arquivos
+// Helper para limpar as pastas de sessão do WhatsApp (suporta Baileys e legados)
 async function cleanSessionFolder(schoolHash) {
-    const sessionPath = path.join(__dirname, '.wwebjs_auth', `session-dk_chatbot_session_${schoolHash}`);
+    const sessionPath = path.join(__dirname, '.baileys_auth', `session_${schoolHash}`);
+    const oldSessionPath = path.join(__dirname, '.wwebjs_auth', `session-dk_chatbot_session_${schoolHash}`);
     try {
         if (fs.existsSync(sessionPath)) {
-            console.log(`Limpando pasta de sessão do WhatsApp para a escola ${schoolHash}...`);
+            console.log(`Limpando pasta de sessão do WhatsApp (Baileys) para a escola ${schoolHash}...`);
             fs.rmSync(sessionPath, { recursive: true, force: true });
-            console.log(`Pasta de sessão da escola ${schoolHash} limpa com sucesso!`);
+        }
+        if (fs.existsSync(oldSessionPath)) {
+            fs.rmSync(oldSessionPath, { recursive: true, force: true });
         }
     } catch (err) {
         console.error(`Erro ao limpar pasta de sessão para a escola ${schoolHash}:`, err.message);
     }
 }
 
-// Helper para remover ouvintes e destruir de forma limpa um cliente do WhatsApp
+// Helper para remover ouvintes e encerrar o soquete do WhatsApp (Baileys)
 async function destroyWhatsAppClient(schoolHash) {
     if (reconnectTimers[schoolHash]) {
         clearTimeout(reconnectTimers[schoolHash]);
@@ -2718,248 +2634,193 @@ async function destroyWhatsAppClient(schoolHash) {
     }
     const client = whatsappClients[schoolHash];
     if (client) {
-        console.log(`[${schoolHash}] Destruindo cliente WhatsApp existente e removendo ouvintes...`);
+        console.log(`[${schoolHash}] Encerrando conexão do WhatsApp (Baileys)...`);
         try {
-            client.removeAllListeners();
-            
-            // Tenta obter o PID do browser do Puppeteer para garantir a finalização se necessário
-            let pid = null;
-            if (client.pupBrowser && client.pupBrowser.process()) {
-                pid = client.pupBrowser.process().pid;
+            if (client.ev) {
+                client.ev.removeAllListeners('connection.update');
+                client.ev.removeAllListeners('messages.upsert');
+                client.ev.removeAllListeners('creds.update');
             }
-
-            // Tenta encerrar graciosamente com timeout de 5 segundos
-            try {
-                await Promise.race([
-                    client.destroy(),
-                    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout no destroy')), 5000))
-                ]);
-            } catch (destroyErr) {
-                console.warn(`[${schoolHash}] Falha ou timeout ao destruir cliente (prosseguindo para PID-kill):`, destroyErr.message);
-            }
-
-            // Se o processo ainda existir em segundo plano, encerra com SIGKILL
-            if (pid) {
-                try {
-                    process.kill(pid, 'SIGKILL');
-                    console.log(`[${schoolHash}] Processo Chromium zumbi (PID ${pid}) finalizado.`);
-                } catch (killErr) {
-                    // Ignora se o processo já tiver sido encerrado
-                }
+            if (typeof client.end === 'function') {
+                client.end(undefined);
             }
         } catch (err) {
-            console.error(`[${schoolHash}] Erro ao destruir cliente:`, err);
+            console.error(`[${schoolHash}] Erro ao destruir cliente Baileys:`, err);
         }
         delete whatsappClients[schoolHash];
     }
-    isInitializingWhatsApp[schoolHash] = false; // Reseta a trava de inicialização para permitir recriação
+    isInitializingWhatsApp[schoolHash] = false;
 }
 
 async function initWhatsApp(schoolHash, schoolConfig) {
     if (isInitializingWhatsApp[schoolHash]) {
-        console.log(`[${schoolConfig.nome_fantasia || schoolHash}] WhatsApp Client já está inicializando, ignorando.`);
+        console.log(`[${schoolConfig.nome_fantasia || schoolHash}] WhatsApp Client (Baileys) já está inicializando, ignorando.`);
         return;
     }
     isInitializingWhatsApp[schoolHash] = true;
 
-    // Garante a destruição de qualquer cliente anterior da mesma escola
     await destroyWhatsAppClient(schoolHash);
-    isInitializingWhatsApp[schoolHash] = true; // Mantém a trava após o destroy
+    isInitializingWhatsApp[schoolHash] = true;
 
-    console.log(`[${schoolConfig.nome_fantasia || schoolHash}] Inicializando WhatsApp Client...`);
+    console.log(`[${schoolConfig.nome_fantasia || schoolHash}] Inicializando WhatsApp Client (Baileys WebSocket)...`);
     whatsappStatuses[schoolHash] = 'INITIALIZING';
     whatsappQrData[schoolHash] = null;
 
-    const client = new Client({
-        authStrategy: new LocalAuth({
-            clientId: `dk_chatbot_session_${schoolHash}`,
-            dataPath: path.join(__dirname, '.wwebjs_auth')
-        }),
-        deviceName: 'chatbot',
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-        authTimeoutMs: 300000,
-        takeoverOnConflict: true,
-        takeoverTimeoutMs: 0,
-        puppeteer: {
-            headless: true,
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-            protocolTimeout: 300000, // Timeout de 5min no protocolo IPC do Puppeteer
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-gpu',
-                '--no-first-run',
-                '--disable-extensions',
-                '--disable-default-apps',
-                '--mute-audio',
-                '--no-default-browser-check',
-                '--disable-web-security',
-                '--disable-renderer-backgrounding',
-                '--disable-background-timer-throttling',
-                '--disable-backgrounding-occluded-windows',
-                '--disable-features=CalculateWindowOcclusionForOccludedWindows'
-            ]
-        }
-    });
-
-    client.on('qr', async (qr) => {
-        console.log(`[${schoolConfig.nome_fantasia || schoolHash}] QR Code recebido para WhatsApp.`);
-        
-        // Se a inicialização NÃO foi manual (foi automática no startup),
-        // significa que a sessão salva no disco expirou ou é inválida.
-        // Devemos limpar a sessão e colocar como DESCONECTADO para liberar recursos e mostrar o botão de Ativar.
-        const isManual = whatsappManualInitRequested[schoolHash] === true;
-        if (!isManual) {
-            console.log(`[${schoolConfig.nome_fantasia || schoolHash}] Sessão expirada/inválida detectada no startup. Destruindo cliente para poupar recursos...`);
-            whatsappStatuses[schoolHash] = 'DISCONNECTED';
-            whatsappQrData[schoolHash] = null;
-            isInitializingWhatsApp[schoolHash] = false;
-            
-            setTimeout(async () => {
-                try {
-                    await destroyWhatsAppClient(schoolHash);
-                    await cleanSessionFolder(schoolHash);
-                } catch (destroyErr) {
-                    console.error(`[${schoolHash}] Erro ao destruir cliente zumbi do startup:`, destroyErr.message);
-                }
-            }, 1000);
-            return;
+    try {
+        const sessionDir = path.join(__dirname, '.baileys_auth', `session_${schoolHash}`);
+        if (!fs.existsSync(sessionDir)) {
+            fs.mkdirSync(sessionDir, { recursive: true });
         }
 
-        try {
-            whatsappQrData[schoolHash] = await qrcode.toDataURL(qr);
-            whatsappStatuses[schoolHash] = 'QR_READY';
-        } catch (err) {
-            console.error(`[${schoolConfig.nome_fantasia || schoolHash}] Erro ao gerar QR Code:`, err);
-        }
-    });
+        const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
+        const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: [2, 3000, 1017531287] }));
 
-    client.on('ready', () => {
-        console.log(`[${schoolConfig.nome_fantasia || schoolHash}] WhatsApp Client conectado e pronto!`);
-        whatsappStatuses[schoolHash] = 'CONNECTED';
-        whatsappQrData[schoolHash] = null;
-        isInitializingWhatsApp[schoolHash] = false;
-        whatsappManualInitRequested[schoolHash] = false; // Reset da flag de inicialização manual
-        clientInitTime[schoolHash] = Date.now(); // Grava timestamp de conexão pronta
-    });
+        const sock = makeWASocket({
+            version,
+            logger,
+            printQRInTerminal: false,
+            auth: {
+                creds: state.creds,
+                keys: makeCacheableSignalKeyStore(state.keys, logger)
+            },
+            browser: ['DKSOFT Chatbot', 'Chrome', '1.0.0'],
+            generateHighQualityLinkPreview: true,
+            markOnlineOnConnect: true
+        });
 
-    client.on('authenticated', () => {
-        console.log(`[${schoolConfig.nome_fantasia || schoolHash}] WhatsApp Client autenticado!`);
-        whatsappStatuses[schoolHash] = 'CONNECTED';
-        whatsappQrData[schoolHash] = null;
-    });
+        sock.ev.on('creds.update', saveCreds);
 
-    client.on('auth_failure', async (msg) => {
-        console.error(`[${schoolConfig.nome_fantasia || schoolHash}] Falha na autenticação:`, msg);
-        whatsappStatuses[schoolHash] = 'DISCONNECTED';
-        whatsappQrData[schoolHash] = null;
-        isInitializingWhatsApp[schoolHash] = true;
-        await destroyWhatsAppClient(schoolHash);
-        setTimeout(async () => {
-            await cleanSessionFolder(schoolHash);
-            isInitializingWhatsApp[schoolHash] = false;
-        }, 1000);
-    });
+        sock.ev.on('connection.update', async (update) => {
+            const { connection, lastDisconnect, qr } = update;
 
-    client.on('disconnected', async (reason) => {
-        console.log(`[${schoolConfig.nome_fantasia || schoolHash}] WhatsApp Client desconectado inesperadamente:`, reason);
-        whatsappStatuses[schoolHash] = 'DISCONNECTED';
-        whatsappQrData[schoolHash] = null;
-        
-        await destroyWhatsAppClient(schoolHash);
-
-        if (reason === 'LOGOUT') {
-            console.warn(`[WhatsApp - ${schoolHash}] Sessão encerrada (LOGOUT). Aguardando acionamento manual.`);
-            return;
-        }
-        
-        scheduleAutoReconnect(schoolHash, 10000);
-    });
-
-    client.on('message_create', async (msg) => {
-        try {
-            if (msg.fromMe) return; // Ignora mensagens enviadas pelo próprio bot/operador
-            if (msg.from.endsWith('@g.us') || msg.isStatus) return;
-
-            const text = msg.body ? msg.body.trim() : '';
-            if (!text) return;
-
-            // Verifica se o chatbot está suspenso/bloqueado
-            try {
-                const school = await ConfigService.getSchoolConfig(schoolHash);
-                const paymentStatus = getSchoolPaymentStatus(school);
-                if (paymentStatus.blocked) {
-                    console.log(`[WhatsApp - ${schoolHash}] Mensagem de WhatsApp de ${msg.from} ignorada pois o chatbot está bloqueado por falta de pagamento.`);
+            if (qr) {
+                console.log(`[${schoolConfig.nome_fantasia || schoolHash}] QR Code recebido para WhatsApp (Baileys).`);
+                
+                const isManual = whatsappManualInitRequested[schoolHash] === true;
+                if (!isManual) {
+                    console.log(`[${schoolConfig.nome_fantasia || schoolHash}] Sessão expirada/inválida detectada no startup. Encerrando soquete para poupar recursos...`);
+                    whatsappStatuses[schoolHash] = 'DISCONNECTED';
+                    whatsappQrData[schoolHash] = null;
+                    isInitializingWhatsApp[schoolHash] = false;
+                    
+                    setTimeout(async () => {
+                        try {
+                            await destroyWhatsAppClient(schoolHash);
+                            await cleanSessionFolder(schoolHash);
+                        } catch (destroyErr) {
+                            console.error(`[${schoolHash}] Erro ao destruir cliente zumbi do startup:`, destroyErr.message);
+                        }
+                    }, 1000);
                     return;
                 }
-            } catch (payErr) {
-                console.error(`[WhatsApp - ${schoolHash}] Erro ao verificar pagamento no message_create:`, payErr.message);
-            }
 
-            console.log(`[${schoolConfig.nome_fantasia || schoolHash}] Mensagem de WhatsApp de ${msg.from}: "${text}"`);
-
-            const isFirstMessage = !sessions[msg.from];
-            const messageToSend = isFirstMessage ? 'menu' : text;
-            
-            const result = await processChatMessage(msg.from, messageToSend, schoolHash);
-            
-            if (result && result.response) {
-                sendingAutomatedFor.add(msg.from);
                 try {
-                    // Envia via fila sequencial com timeout estendido e suporte a contatos @lid
-                    await queueSendMessage(schoolHash, () => safeSendMessage(msg, result.response, 45000));
-                } catch (sendErr) {
-                    console.error(`[${schoolConfig.nome_fantasia || schoolHash}] Erro crítico ao enviar mensagem de WhatsApp para ${msg.from}:`, sendErr.message);
-                    
-                    // Se o erro indicar travamento/timeout ou queda do navegador, reinicia o cliente automaticamente
-                    const isCrash = sendErr.message && (
-                        sendErr.message.includes('closed') || 
-                        sendErr.message.includes('Protocol error') || 
-                        sendErr.message.includes('Navigation failed') ||
-                        sendErr.message.includes('Target closed') ||
-                        sendErr.message.includes('destroyed') ||
-                        sendErr.message.includes('timed out') ||
-                        sendErr.message.includes('callFunctionOn') ||
-                        sendErr.message.includes('Timeout')
-                    );
-                    if (isCrash) {
-                        console.warn(`[WhatsApp - ${schoolHash}] Falha crítica ou timeout de comunicação com o navegador detectado! Reiniciando cliente...`);
-                        await destroyWhatsAppClient(schoolHash);
-                        scheduleAutoReconnect(schoolHash, 5000);
-                    }
-                } finally {
-                    setTimeout(() => {
-                        sendingAutomatedFor.delete(msg.from);
-                    }, 2000);
+                    whatsappQrData[schoolHash] = await qrcode.toDataURL(qr);
+                    whatsappStatuses[schoolHash] = 'QR_READY';
+                } catch (err) {
+                    console.error(`[${schoolConfig.nome_fantasia || schoolHash}] Erro ao gerar QR Code:`, err);
                 }
             }
-        } catch (err) {
-            console.error(`[${schoolConfig.nome_fantasia || schoolHash}] Erro ao processar mensagem do WhatsApp:`, err);
-        }
-    });
 
-    whatsappClients[schoolHash] = client;
+            if (connection === 'open') {
+                console.log(`[${schoolConfig.nome_fantasia || schoolHash}] WhatsApp Client (Baileys) conectado e pronto!`);
+                whatsappStatuses[schoolHash] = 'CONNECTED';
+                whatsappQrData[schoolHash] = null;
+                isInitializingWhatsApp[schoolHash] = false;
+                whatsappManualInitRequested[schoolHash] = false;
+                clientInitTime[schoolHash] = Date.now();
+            } else if (connection === 'close') {
+                const statusCode = lastDisconnect?.error?.output?.statusCode;
+                const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+                console.log(`[${schoolConfig.nome_fantasia || schoolHash}] Conexão WhatsApp encerrada (código ${statusCode || 'desconhecido'}). Reconectar: ${shouldReconnect}`);
 
-    client.initialize().catch(err => {
-        console.error(`[${schoolConfig.nome_fantasia || schoolHash}] Erro ao inicializar WhatsApp Client:`, err);
+                whatsappStatuses[schoolHash] = 'DISCONNECTED';
+                whatsappQrData[schoolHash] = null;
+
+                await destroyWhatsAppClient(schoolHash);
+
+                if (shouldReconnect) {
+                    scheduleAutoReconnect(schoolHash, 5000);
+                } else {
+                    console.warn(`[WhatsApp - ${schoolHash}] Sessão encerrada (LOGOUT). Limpando pasta de sessão...`);
+                    await cleanSessionFolder(schoolHash);
+                    isInitializingWhatsApp[schoolHash] = false;
+                }
+            }
+        });
+
+        sock.ev.on('messages.upsert', async (m) => {
+            if (m.type !== 'notify') return;
+
+            for (const msg of m.messages) {
+                if (!msg.message || msg.key.fromMe) continue;
+                if (msg.key.remoteJid?.endsWith('@g.us') || msg.key.remoteJid === 'status@broadcast') continue;
+
+                const text = (
+                    msg.message.conversation ||
+                    msg.message.extendedTextMessage?.text ||
+                    msg.message.imageMessage?.caption ||
+                    msg.message.videoMessage?.caption ||
+                    ''
+                ).trim();
+
+                if (!text) continue;
+
+                const remoteJid = msg.key.remoteJid;
+
+                try {
+                    const school = await ConfigService.getSchoolConfig(schoolHash);
+                    const paymentStatus = getSchoolPaymentStatus(school);
+                    if (paymentStatus.blocked) {
+                        console.log(`[WhatsApp - ${schoolHash}] Mensagem de WhatsApp de ${remoteJid} ignorada: chatbot bloqueado.`);
+                        return;
+                    }
+                } catch (payErr) {
+                    console.error(`[WhatsApp - ${schoolHash}] Erro ao verificar pagamento no messages.upsert:`, payErr.message);
+                }
+
+                console.log(`[${schoolConfig.nome_fantasia || schoolHash}] Mensagem de WhatsApp (Baileys) de ${remoteJid}: "${text}"`);
+
+                const isFirstMessage = !sessions[remoteJid];
+                const messageToSend = isFirstMessage ? 'menu' : text;
+
+                const result = await processChatMessage(remoteJid, messageToSend, schoolHash);
+
+                if (result && result.response) {
+                    sendingAutomatedFor.add(remoteJid);
+                    try {
+                        await queueSendMessage(schoolHash, async () => {
+                            await sock.sendMessage(remoteJid, { text: result.response });
+                        });
+                    } catch (sendErr) {
+                        console.error(`[${schoolConfig.nome_fantasia || schoolHash}] Erro ao enviar mensagem no Baileys para ${remoteJid}:`, sendErr.message);
+                    } finally {
+                        setTimeout(() => {
+                            sendingAutomatedFor.delete(remoteJid);
+                        }, 2000);
+                    }
+                }
+            }
+        });
+
+        whatsappClients[schoolHash] = sock;
+
+    } catch (err) {
+        console.error(`[${schoolConfig.nome_fantasia || schoolHash}] Erro ao inicializar Baileys:`, err);
         whatsappStatuses[schoolHash] = 'DISCONNECTED';
         isInitializingWhatsApp[schoolHash] = false;
-    });
+    }
 }
 
 // Inicializa o WhatsApp para todas as escolas configuradas no startup
 async function startWhatsAppForActiveSchools() {
     try {
-        // Mata processos Chromium travados em segundo plano antes do boot
-        await killChromiumProcesses();
-        
         const activeSchools = await ConfigService.getAllSchools();
         activeSchools.forEach(school => {
-            // Verifica se existe pasta de sessão salva para esta escola
-            const sessionPath = path.join(__dirname, '.wwebjs_auth', `session-dk_chatbot_session_${school.hash}`);
-            if (fs.existsSync(sessionPath)) {
-                console.log(`[Startup] Sessão ativa encontrada para a escola [${school.nome_fantasia || school.hash}], iniciando WhatsApp...`);
+            const sessionPath = path.join(__dirname, '.baileys_auth', `session_${school.hash}`);
+            const oldSessionPath = path.join(__dirname, '.wwebjs_auth', `session-dk_chatbot_session_${school.hash}`);
+            if (fs.existsSync(sessionPath) || fs.existsSync(oldSessionPath)) {
+                console.log(`[Startup] Sessão ativa encontrada para a escola [${school.nome_fantasia || school.hash}], iniciando WhatsApp (Baileys)...`);
                 initWhatsApp(school.hash, school);
             } else {
                 console.log(`[Startup] Nenhuma sessão ativa encontrada para a escola [${school.nome_fantasia || school.hash}], aguardando ativação manual.`);
@@ -2984,15 +2845,13 @@ app.get('/api/whatsapp/status', async (req, res) => {
     const client = whatsappClients[hash];
     let connectionInfo = null;
 
-    // Se o status for DISCONNECTED e não estiver inicializando, tenta iniciar o cliente apenas se 'init=true' for passado
     const shouldInit = req.query.init === 'true';
     if (status === 'DISCONNECTED' && !isInitializingWhatsApp[hash] && shouldInit) {
         try {
             const schoolConfig = await ConfigService.getSchoolConfig(hash);
             if (schoolConfig) {
                 console.log(`[${schoolConfig.nome_fantasia || hash}] Tentando inicializar o WhatsApp via chamada de status...`);
-                whatsappManualInitRequested[hash] = true; // Marca como inicialização manual para exibir o QR Code
-                // Chama a inicialização de forma assíncrona
+                whatsappManualInitRequested[hash] = true;
                 initWhatsApp(hash, schoolConfig);
                 status = 'INITIALIZING';
                 whatsappStatuses[hash] = 'INITIALIZING';
@@ -3002,10 +2861,10 @@ app.get('/api/whatsapp/status', async (req, res) => {
         }
     }
 
-    if (status === 'CONNECTED' && client && client.info) {
+    if (status === 'CONNECTED' && client && client.user) {
         connectionInfo = {
-            pushname: client.info.pushname,
-            wid: client.info.wid ? client.info.wid.user : null
+            pushname: client.user.name || client.user.notify || 'WhatsApp Bot',
+            wid: client.user.id ? client.user.id.split(':')[0] : null
         };
     }
     res.json({
@@ -3022,29 +2881,16 @@ app.post('/api/whatsapp/disconnect', async (req, res) => {
     }
 
     const client = whatsappClients[hash];
-    let schoolConfig = {};
-    try {
-        schoolConfig = await ConfigService.getSchoolConfig(hash) || {};
-    } catch (errConfig) {
-        console.error('Erro ao buscar configuração no disconnect:', errConfig);
-    }
 
     whatsappStatuses[hash] = 'DISCONNECTING';
     whatsappQrData[hash] = null;
     isInitializingWhatsApp[hash] = true;
 
     try {
-        if (client) {
-            client.removeAllListeners();
-            // Tenta efetuar o logout na página com timeout de 5 segundos para evitar travamentos
-            try {
-                await Promise.race([
-                    client.logout(),
-                    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout no logout')), 5000))
-                ]);
-            } catch (logoutErr) {
-                console.warn(`[${hash}] Falha ou timeout no logout do WhatsApp:`, logoutErr.message);
-            }
+        if (client && typeof client.logout === 'function') {
+            await client.logout().catch(errLogout => {
+                console.warn(`[${hash}] Falha ao deslogar soquete Baileys:`, errLogout.message);
+            });
         }
     } catch (err) {
         console.error(`Erro ao desconectar WhatsApp da escola ${hash}:`, err);
@@ -3055,7 +2901,6 @@ app.post('/api/whatsapp/disconnect', async (req, res) => {
         await cleanSessionFolder(hash);
         whatsappStatuses[hash] = 'DISCONNECTED';
         isInitializingWhatsApp[hash] = false;
-        // Não reinicializa automaticamente; aguarda o usuário clicar em "Ativar"
     }, 1500);
 
     res.json({ success: true, message: 'WhatsApp desconectado com sucesso!' });
