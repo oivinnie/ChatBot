@@ -51,7 +51,7 @@ if (!sessionId) {
 }
 
 const urlParams = new URLSearchParams(window.location.search);
-const hash = urlParams.get('hash') || '';
+const hash = urlParams.get('i') || urlParams.get('hash') || '';
 
 const chatLog = document.getElementById('chatLog');
 const userInput = document.getElementById('userInput');

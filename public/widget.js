@@ -15,7 +15,7 @@
     if (scriptSrc) {
         try {
             const urlObj = new URL(scriptSrc);
-            hash = urlObj.searchParams.get('hash') || '';
+            hash = urlObj.searchParams.get('i') || urlObj.searchParams.get('hash') || '';
         } catch (e) {
             console.error('Erro ao processar URL do script widget:', e);
         }
@@ -233,7 +233,7 @@
         
         iframe = document.createElement('iframe');
         iframe.className = 'dk-chat-widget-iframe';
-        iframe.src = `${hostUrl}/index.html?hash=${hash}&iframe=true`;
+        iframe.src = `${hostUrl}/index.html?i=${hash}&iframe=true`;
         iframeContainer.appendChild(iframe);
         
         document.body.appendChild(iframeContainer);
@@ -312,7 +312,7 @@
 
         // Faz a requisição para obter configurações atualizadas
         try {
-            const res = await fetch(`${hostUrl}/api/info?hash=${hash}`);
+            const res = await fetch(`${hostUrl}/api/info?i=${hash}`);
             if (res.status === 404) {
                 localStorage.removeItem(cacheKey);
                 if (launcher) launcher.remove();

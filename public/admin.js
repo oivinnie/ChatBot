@@ -45,9 +45,9 @@ function applyTheme(themeName) {
     document.body.style.backgroundImage = theme.bodyBg;
 }
 
-// Obtém o hash da URL query parameter
+// Obtém o parâmetro i (ou hash) da URL query parameter
 const urlParams = new URLSearchParams(window.location.search);
-const hash = urlParams.get('hash') || '';
+const hash = urlParams.get('i') || urlParams.get('hash') || '';
 
 // DOM Elements - Login Section
 const loginSection = document.getElementById('loginSection');
@@ -59,9 +59,7 @@ const dkappInactiveWarning = document.getElementById('dkappInactiveWarning');
 // DOM Elements - Config Section
 const configSection = document.getElementById('configSection');
 const botEmoji = document.getElementById('botEmoji');
-const portalAlunoLink = document.getElementById('portalAlunoLink');
 const atendimentoNumero = document.getElementById('atendimentoNumero');
-const cadastroInteressadosLink = document.getElementById('cadastroInteressadosLink');
 const validadorCertificadoLink = document.getElementById('validadorCertificadoLink');
 const themeSelect = document.getElementById('themeSelect');
 
@@ -106,8 +104,7 @@ function logoutSchool() {
 // Habilita ou desabilita campos de configuração
 function disableConfigFields(disabled) {
     const fields = [
-        portalAlunoLink, atendimentoNumero, cadastroInteressadosLink,
-        themeSelect, botEmoji, showFinanceiro,
+        atendimentoNumero, themeSelect, botEmoji, showFinanceiro,
         showHorarios, showBoletim, showPlataforma, showConteudo,
         showValidador, showInteressados, showTodasParcelas, widgetPosition, widgetText, testBtn, saveBtn,
         document.getElementById('waRefreshBtn'), document.getElementById('waDisconnectBtn')
@@ -162,7 +159,7 @@ async function loadConfig() {
     disableConfigFields(false);
 
     try {
-        const response = await fetch(`/api/config?hash=${hash}`);
+        const response = await fetch(`/api/config?i=${hash}`);
         if (response.status === 403) {
             const data = await response.json();
             if (data.error === 'PAYMENT_BLOCKED') {
@@ -189,9 +186,7 @@ async function loadConfig() {
             }
         }
         
-        if (portalAlunoLink) portalAlunoLink.value = config.portal_aluno_link || 'https://portal.dksoft.com.br/';
         if (atendimentoNumero) atendimentoNumero.value = formatPhone(config.atendimento_numero || '');
-        if (cadastroInteressadosLink) cadastroInteressadosLink.value = config.cadastro_interessados_link || '';
         if (validadorCertificadoLink) validadorCertificadoLink.value = config.validador_certificado_link || 'https://suportedksoft.com.br/certificado/';
         if (themeSelect) themeSelect.value = config.theme || 'indigo';
         if (botEmoji) botEmoji.value = config.emoji || '🤖';
@@ -212,19 +207,19 @@ async function loadConfig() {
 
         // Atualiza a visualização do widget test
         if (widgetTestLink) {
-            widgetTestLink.href = `/widget-test.html?hash=${hash}`;
+            widgetTestLink.href = `/widget-test.html?i=${hash}`;
         }
 
-        // Atualizar instrução de incorporação com o hash da escola
+        // Atualizar instrução de incorporação com a chave da escola
         const embedBox = document.querySelector('.code-box-embed');
         if (embedBox) {
             const hostUrl = window.location.origin;
-            embedBox.textContent = `<script src="${hostUrl}/widget.js?hash=${hash}"></script>`;
+            embedBox.textContent = `<script src="${hostUrl}/widget.js?i=${hash}"></script>`;
         }
 
         // Buscar informações adicionais da empresa para exibir no cabeçalho
         try {
-            const infoResponse = await fetch(`/api/info?hash=${hash}`);
+            const infoResponse = await fetch(`/api/info?i=${hash}`);
             const infoData = await infoResponse.json();
             const headerTitle = document.getElementById('adminTitleHeader');
             if (headerTitle && infoData.id_atendimento && infoData.nome_fantasia) {
@@ -420,9 +415,7 @@ async function saveConfig() {
     
     const configData = {
         hash: hash,
-        portal_aluno_link: portalAlunoLink ? portalAlunoLink.value : '',
         atendimento_numero: atendimentoNumero ? atendimentoNumero.value.replace(/\D/g, '') : '',
-        cadastro_interessados_link: cadastroInteressadosLink ? cadastroInteressadosLink.value : '',
         validador_certificado_link: 'https://suportedksoft.com.br/certificado/',
         theme: themeSelect ? themeSelect.value : 'indigo',
         emoji: botEmoji ? botEmoji.value : '🤖',
@@ -543,7 +536,7 @@ const waActivateBtn = document.getElementById('waActivateBtn');
 async function checkWhatsAppStatus() {
     if (!hash) return;
     try {
-        const response = await fetch(`/api/whatsapp/status?hash=${hash}`);
+        const response = await fetch(`/api/whatsapp/status?i=${hash}`);
         const data = await response.json();
         
         if (data.status === 'INITIALIZING') {
@@ -641,7 +634,7 @@ if (waActivateBtn) {
                 if (waActivateBtn) waActivateBtn.style.display = 'none';
                 
                 try {
-                    const response = await fetch(`/api/whatsapp/status?hash=${hash}&init=true`);
+                    const response = await fetch(`/api/whatsapp/status?i=${hash}&init=true`);
                     const data = await response.json();
                     checkWhatsAppStatus();
                 } catch (err) {

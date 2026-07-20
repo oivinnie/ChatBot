@@ -111,17 +111,17 @@
     <!-- Script de incorporação do widget -->
     <script>
         const urlParams = new URLSearchParams(window.location.search);
-        let hash = urlParams.get('hash') || localStorage.getItem('school_hash') || '';
+        let hash = urlParams.get('i') || urlParams.get('hash') || localStorage.getItem('school_hash') || '';
         
         const script = document.createElement('script');
-        script.src = 'widget.js' + (hash ? '?hash=' + hash : '');
+        script.src = 'widget.js' + (hash ? '?i=' + hash : '');
         document.body.appendChild(script);
 
         // Também atualiza o code-box para exibir o código dinâmico correspondente
         const codeBox = document.querySelector('.code-box');
         if (codeBox) {
             const hostUrl = window.location.origin;
-            codeBox.textContent = `<script src="${hostUrl}/widget.js${hash ? '?hash=' + hash : ''}"><\/script>`;
+            codeBox.textContent = `<script src="${hostUrl}/widget.js${hash ? '?i=' + hash : ''}"><\/script>`;
         }
 
         // Lógica para copiar o código

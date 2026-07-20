@@ -7,55 +7,7 @@
 require('dotenv').config();
 const mysql = require('mysql2/promise');
 const crypto = require('crypto');
-
-// Chave e IV para criptografia AES-256-CBC (chave de 32 bytes)
-const ENCRYPTION_KEY = Buffer.from('dK$oft_S3cr3tKey_F0r_Encrypt10n!', 'utf-8');
-const IV_LENGTH = 16;
-
-// Pools de conexão com as bases MySQL
-let centralPool = null;
-let dksoftPool = null;
-
-// Caches em memória
-const configCache = new Map(); // chave (id ou hash) -> { data, timestamp }
-const connCache = new Map(); // id_atendimento -> { data, timestamp }
-
-// TTLs em milissegundos
-const CONFIG_CACHE_TTL = 1000 * 60 * 60; // 1 hora
-const CONN_CACHE_TTL = 1000 * 60 * 5;    // 5 minutos
-
-// Função para criptografar texto (caminhos, senhas, etc.)
-function encrypt(text) {
-    if (!text) return '';
-    try {
-        const iv = crypto.randomBytes(IV_LENGTH);
-        const cipher = crypto.createCipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
-        let encrypted = cipher.update(text, 'utf8');
-        encrypted = Buffer.concat([encrypted, cipher.final()]);
-        return iv.toString('hex') + ':' + encrypted.toString('hex');
-    } catch (err) {
-        console.error('Erro ao criptografar:', err);
-        return text;
-    }
-}
-
-// Função para descriptografar texto
-function decrypt(text) {
-    if (!text) return '';
-    try {
-        const textParts = text.split(':');
-        if (textParts.length < 2) return text; // Retorna o texto original se não estiver no formato iv:ciphertext
-        const iv = Buffer.from(textParts.shift(), 'hex');
-        const encryptedText = Buffer.from(textParts.join(':'), 'hex');
-        const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
-        let decrypted = decipher.update(encryptedText);
-        decrypted = Buffer.concat([decrypted, decipher.final()]);
-        return decrypted.toString('utf8');
-    } catch (err) {
-        console.error('Erro ao descriptografar:', err);
-        return text;
-    }
-}
+const { encrypt, decrypt, encryptId_portal_aluno, decryptId_portal_aluno } = require('./Components/crypto');
 
 // Inicializa pools de conexão
 function getCentralPool() {
@@ -118,15 +70,21 @@ function invalidateCache(idOrHash) {
 // Busca a configuração da escola no banco central do chatbot (escola_configs)
 async function getSchoolConfig(idOrHash) {
     if (!idOrHash) return null;
-    const strKey = String(idOrHash).trim();
+    let strKey = String(idOrHash).trim();
+    
+    const decryptedId = decryptId_portal_aluno(strKey);
+    if (decryptedId) {
+        strKey = decryptedId;
+    }
+
     if (strKey === 'teste0' || strKey === '0') {
         return {
             id_atendimento: 0,
             hash: 'teste0',
             cnpj: '00000000000000',
             nome_fantasia: 'DKSOFT TESTE',
-            portal_aluno_link: 'https://portal.dksoft.com.br/',
-            cadastro_interessados_link: '',
+            portal_aluno_link: 'https://suportedksoft.com.br/portal_aluno/index?i=' + encryptId_portal_aluno(0),
+            cadastro_interessados_link: 'https://appdksoft.com.br/leads/?i=' + encryptId_portal_aluno(0),
             validador_certificado_link: 'https://suportedksoft.com.br/certificado/',
             theme: 'indigo',
             emoji: '🤖',
@@ -239,6 +197,12 @@ async function getSchoolConfig(idOrHash) {
     });
     if (config.show_todas_parcelas === undefined) {
         config.show_todas_parcelas = true;
+    }
+
+    if (config && config.id_atendimento) {
+        const encId = encryptId_portal_aluno(config.id_atendimento);
+        config.portal_aluno_link = `https://suportedksoft.com.br/portal_aluno/index?i=${encId}`;
+        config.cadastro_interessados_link = `https://appdksoft.com.br/leads/?i=${encId}`;
     }
 
     // Salva no cache sob ambas as chaves (ID e Hash)
@@ -696,6 +660,8 @@ async function getFranchiseSchools(currentHash) {
 module.exports = {
     encrypt,
     decrypt,
+    encryptId_portal_aluno,
+    decryptId_portal_aluno,
     getSchoolConfig,
     getSchoolConnectionConfig,
     saveSchoolConfig,

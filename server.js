@@ -2334,7 +2334,7 @@ app.post('/api/admin/franquias/schools/associate', requireAdminAuth, async (req,
 
 // ROTAS DE CONFIGURAÇÃO DO BANCO DE DADOS
 app.get('/api/config', async (req, res) => {
-    const { hash } = req.query;
+    const hash = req.query.i || req.query.hash;
     try {
         if (hash) {
             let school = await ConfigService.getSchoolConfig(hash);
@@ -2400,7 +2400,8 @@ app.get('/api/config', async (req, res) => {
 });
 
 app.post('/api/config', async (req, res) => {
-    const { hash, portal_aluno_link, cadastro_interessados_link, validador_certificado_link, theme, emoji, show_financeiro, show_horarios, show_boletim, show_plataforma, show_conteudo, show_validador, show_interessados, atendimento_numero, widget_position, widget_text } = req.body;
+    const hash = req.body.i || req.body.hash;
+    const { portal_aluno_link, cadastro_interessados_link, validador_certificado_link, theme, emoji, show_financeiro, show_horarios, show_boletim, show_plataforma, show_conteudo, show_validador, show_interessados, atendimento_numero, widget_position, widget_text } = req.body;
     
     if (!hash) {
         return res.status(400).json({ error: 'O id da escola é obrigatório.' });
@@ -2469,7 +2470,7 @@ app.post('/api/config/test', async (req, res) => {
 
 // Retorna as informações do bot (Emoji e Nome Fantasia da Empresa)
 app.get('/api/info', async (req, res) => {
-    const { hash } = req.query;
+    const hash = req.query.i || req.query.hash;
     let emoji = '🤖';
     let theme = 'indigo';
     let title = 'Assistente';
@@ -2965,7 +2966,7 @@ startWhatsAppForActiveSchools();
 
 // API Endpoints para obter status do WhatsApp e QR Code
 app.get('/api/whatsapp/status', async (req, res) => {
-    const { hash } = req.query;
+    const hash = req.query.i || req.query.hash;
     if (!hash) {
         return res.status(400).json({ error: 'O hash da escola é obrigatório.' });
     }
