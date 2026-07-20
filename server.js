@@ -6,6 +6,10 @@
  */
 
 process.on('unhandledRejection', (reason, promise) => {
+    const msg = reason && (reason.message || String(reason));
+    if (msg && (msg.includes('detached Frame') || msg.includes('Execution context was destroyed') || msg.includes('Target closed') || msg.includes('Session closed'))) {
+        return;
+    }
     console.error('Rejeição não capturada em:', promise, 'razão:', reason);
 });
 process.on('uncaughtException', (err) => {
@@ -2625,6 +2629,28 @@ const whatsappManualInitRequested = {}; // hash -> boolean
 const lastManualMessageTime = {}; // recipientId -> timestamp
 const sendingAutomatedFor = new Set(); // recipientId
 const clientInitTime = {}; // hash -> timestamp (para reinício programado)
+const reconnectTimers = {}; // hash -> timeoutId (gerenciador de reconexão única)
+
+function scheduleAutoReconnect(schoolHash, delayMs = 10000) {
+    if (reconnectTimers[schoolHash]) {
+        clearTimeout(reconnectTimers[schoolHash]);
+        reconnectTimers[schoolHash] = null;
+    }
+    console.warn(`[WhatsApp - ${schoolHash}] Agendando reconexão automática em ${delayMs/1000}s...`);
+    reconnectTimers[schoolHash] = setTimeout(async () => {
+        reconnectTimers[schoolHash] = null;
+        try {
+            isInitializingWhatsApp[schoolHash] = false;
+            const freshConfig = await ConfigService.getSchoolConfig(schoolHash);
+            if (freshConfig) {
+                await initWhatsApp(schoolHash, freshConfig);
+            }
+        } catch (reconErr) {
+            console.error(`[WhatsApp - ${schoolHash}] Falha na reconexão automática:`, reconErr.message);
+            isInitializingWhatsApp[schoolHash] = false;
+        }
+    }, delayMs);
+}
 
 // Rotina preventiva: reinicia clientes ativos há mais de 24 horas durante a madrugada (limpeza de memória do Puppeteer)
 setInterval(async () => {
@@ -2689,6 +2715,10 @@ async function cleanSessionFolder(schoolHash) {
 
 // Helper para remover ouvintes e destruir de forma limpa um cliente do WhatsApp
 async function destroyWhatsAppClient(schoolHash) {
+    if (reconnectTimers[schoolHash]) {
+        clearTimeout(reconnectTimers[schoolHash]);
+        reconnectTimers[schoolHash] = null;
+    }
     const client = whatsappClients[schoolHash];
     if (client) {
         console.log(`[${schoolHash}] Destruindo cliente WhatsApp existente e removendo ouvintes...`);
@@ -2839,24 +2869,15 @@ async function initWhatsApp(schoolHash, schoolConfig) {
         console.log(`[${schoolConfig.nome_fantasia || schoolHash}] WhatsApp Client desconectado inesperadamente:`, reason);
         whatsappStatuses[schoolHash] = 'DISCONNECTED';
         whatsappQrData[schoolHash] = null;
-        isInitializingWhatsApp[schoolHash] = true;
         
         await destroyWhatsAppClient(schoolHash);
+
+        if (reason === 'LOGOUT') {
+            console.warn(`[WhatsApp - ${schoolHash}] Sessão encerrada (LOGOUT). Aguardando acionamento manual.`);
+            return;
+        }
         
-        // Auto-reconexão para desconexões inesperadas (como quedas de rede ou reinício de processos Chromium)
-        console.warn(`[WhatsApp - ${schoolHash}] Tentando auto-reconexão automática em 10 segundos...`);
-        setTimeout(async () => {
-            isInitializingWhatsApp[schoolHash] = false;
-            try {
-                const freshConfig = await ConfigService.getSchoolConfig(schoolHash);
-                if (freshConfig) {
-                    await initWhatsApp(schoolHash, freshConfig);
-                }
-            } catch (reconErr) {
-                console.error(`[WhatsApp - ${schoolHash}] Falha ao tentar auto-reconexão após queda de conexão:`, reconErr.message);
-                isInitializingWhatsApp[schoolHash] = false;
-            }
-        }, 10000); // Aguarda 10 segundos para restabelecer
+        scheduleAutoReconnect(schoolHash, 10000);
     });
 
     client.on('message_create', async (msg) => {
@@ -2907,20 +2928,8 @@ async function initWhatsApp(schoolHash, schoolConfig) {
                     );
                     if (isCrash) {
                         console.warn(`[WhatsApp - ${schoolHash}] Falha crítica ou timeout de comunicação com o navegador detectado! Reiniciando cliente...`);
-                        setTimeout(async () => {
-                            try {
-                                isInitializingWhatsApp[schoolHash] = false;
-                                await destroyWhatsAppClient(schoolHash);
-                                isInitializingWhatsApp[schoolHash] = false;
-                                const freshConfig = await ConfigService.getSchoolConfig(schoolHash);
-                                if (freshConfig) {
-                                    await initWhatsApp(schoolHash, freshConfig);
-                                }
-                            } catch (reconErr) {
-                                console.error(`[WhatsApp - ${schoolHash}] Erro ao tentar reinicializar cliente após crash do Puppeteer:`, reconErr.message);
-                                isInitializingWhatsApp[schoolHash] = false;
-                            }
-                        }, 5000);
+                        await destroyWhatsAppClient(schoolHash);
+                        scheduleAutoReconnect(schoolHash, 5000);
                     }
                 } finally {
                     setTimeout(() => {
