@@ -2400,22 +2400,22 @@ app.get('/api/config', async (req, res) => {
 });
 
 app.post('/api/config', async (req, res) => {
-    const hash = req.body.i || req.body.hash;
-    const { portal_aluno_link, cadastro_interessados_link, validador_certificado_link, theme, emoji, show_financeiro, show_horarios, show_boletim, show_plataforma, show_conteudo, show_validador, show_interessados, atendimento_numero, widget_position, widget_text } = req.body;
+    const hashParam = req.body.i || req.body.hash;
+    const { portal_aluno_link, cadastro_interessados_link, validador_certificado_link, theme, emoji, show_financeiro, show_horarios, show_boletim, show_plataforma, show_conteudo, show_validador, show_interessados, show_todas_parcelas, atendimento_numero, widget_position, widget_text } = req.body;
     
-    if (!hash) {
+    if (!hashParam) {
         return res.status(400).json({ error: 'O id da escola é obrigatório.' });
     }
 
     try {
-        const config = await ConfigService.getSchoolConfig(hash);
+        const config = await ConfigService.getSchoolConfig(hashParam);
         if (!config) {
             return res.status(404).json({ error: 'Escola não encontrada. Por favor, faça a validação primeiro.' });
         }
 
         const configData = {
             id_atendimento: config.id_atendimento,
-            hash: hash,
+            hash: config.hash || hashParam,
             cnpj: config.cnpj,
             nome_fantasia: config.nome_fantasia,
             portal_aluno_link: portal_aluno_link ? portal_aluno_link.trim() : '',
@@ -2440,7 +2440,7 @@ app.post('/api/config', async (req, res) => {
         res.json({ success: true, message: 'Configurações gravadas com sucesso!' });
     } catch (err) {
         console.error('Erro ao salvar configuração:', err);
-        res.status(500).json({ error: 'Erro interno ao salvar as configurações.' });
+        res.status(500).json({ error: err.message || 'Erro interno ao salvar as configurações.' });
     }
 });
 

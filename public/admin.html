@@ -149,8 +149,8 @@
                             <label for="portalAlunoLink" style="margin: 0;">Link do Portal do Aluno</label>
                             <button type="button" class="btn-copy-small" onclick="copyInputText('portalAlunoLink', this)">📋 Copiar</button>
                         </div>
-                        <small style="display:block; margin-top:4px; margin-bottom:4px; color:var(--text-secondary);">Link padrão gerado automaticamente para esta escola.</small>
-                        <input type="text" id="portalAlunoLink" readonly style="background: rgba(0, 0, 0, 0.03); color: var(--text-secondary); cursor: default;">
+                        <small style="display:block; margin-top:4px; margin-bottom:4px; color:var(--text-secondary);">Deixe em branco para utilizar o link padrão.</small>
+                        <input type="text" id="portalAlunoLink" placeholder="Gerado automaticamente se vazio">
                     </div>
 
                     <div class="form-group">
@@ -171,11 +171,6 @@
                         <input type="text" id="validadorCertificadoLink" placeholder="https://suportedksoft.com.br/certificado/">
                     </div>
 
-                    <div class="form-group">
-                        <label for="atendimentoNumero">Número de Atendimento (WhatsApp)</label>
-						<small>Preencha esse campo para ativar a opção "Falar com Atendente"</small>
-                        <input type="text" id="atendimentoNumero" placeholder="Ex: 5511999999999">
-                    </div>
 
                     <div class="form-group">
                         <label for="themeSelect">Tema do Chat & widget</label>
@@ -245,6 +240,12 @@
                                 <input type="checkbox" id="showInteressados" style="width: 18px; height: 18px; cursor: pointer; accent-color: #4f46e5;"> Cadastro de Interessados (Ainda não sou aluno)
                             </label>
                         </div>
+                    </div>
+					
+					<div class="form-group">
+                        <label for="atendimentoNumero">Número de Atendimento (WhatsApp)</label>
+						<small>Preencha esse campo para ativar a opção "Falar com Atendente"</small>
+                        <input type="text" id="atendimentoNumero" placeholder="Ex: 5511999999999">
                     </div>
 
                     <div class="form-group" style="margin-top: 15px;">
