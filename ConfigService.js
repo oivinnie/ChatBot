@@ -230,13 +230,16 @@ async function getSchoolConfig(idOrHash) {
     // Converte show_... fields para booleanos se necessário
     const booleanFields = [
         'show_financeiro', 'show_horarios', 'show_boletim', 
-        'show_plataforma', 'show_conteudo', 'show_validador', 'show_interessados'
+        'show_plataforma', 'show_conteudo', 'show_validador', 'show_interessados', 'show_todas_parcelas'
     ];
     booleanFields.forEach(field => {
         if (config[field] !== undefined) {
             config[field] = !!config[field];
         }
     });
+    if (config.show_todas_parcelas === undefined) {
+        config.show_todas_parcelas = true;
+    }
 
     // Salva no cache sob ambas as chaves (ID e Hash)
     const cacheEntry = { data: config, timestamp: now };
@@ -359,14 +362,28 @@ async function getSchoolConnectionConfig(idOrHash) {
     return connConfig;
 }
 
+let isColumnChecked = false;
+async function ensureShowTodasParcelasColumn() {
+    if (isColumnChecked) return;
+    try {
+        const pool = getCentralPool();
+        await pool.execute("ALTER TABLE escola_configs ADD COLUMN show_todas_parcelas TINYINT(1) DEFAULT 1");
+        isColumnChecked = true;
+    } catch (err) {
+        // Se a coluna já existir (ex: ER_DUP_FIELDNAME), ignora o erro
+        isColumnChecked = true;
+    }
+}
+
 // Salva ou atualiza as configurações da escola no banco central
 async function saveSchoolConfig(configData) {
+    await ensureShowTodasParcelasColumn();
     const pool = getCentralPool();
     const {
         id_atendimento, hash, cnpj, nome_fantasia,
         portal_aluno_link, cadastro_interessados_link, validador_certificado_link,
         theme, emoji, show_financeiro, show_horarios, show_boletim,
-        show_plataforma, show_conteudo, show_validador, show_interessados,
+        show_plataforma, show_conteudo, show_validador, show_interessados, show_todas_parcelas,
         atendimento_numero, widget_position, widget_text,
         host, port, database_path, db_user, db_password
     } = configData;
@@ -380,9 +397,9 @@ async function saveSchoolConfig(configData) {
             id_atendimento, hash, cnpj, nome_fantasia,
             portal_aluno_link, cadastro_interessados_link, validador_certificado_link,
             theme, emoji, show_financeiro, show_horarios, show_boletim,
-            show_plataforma, show_conteudo, show_validador, show_interessados,
+            show_plataforma, show_conteudo, show_validador, show_interessados, show_todas_parcelas,
             atendimento_numero, widget_position, widget_text, database_path, db_password, host, port, db_user
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
             portal_aluno_link = VALUES(portal_aluno_link),
             cadastro_interessados_link = VALUES(cadastro_interessados_link),
@@ -396,6 +413,7 @@ async function saveSchoolConfig(configData) {
             show_conteudo = VALUES(show_conteudo),
             show_validador = VALUES(show_validador),
             show_interessados = VALUES(show_interessados),
+            show_todas_parcelas = VALUES(show_todas_parcelas),
             atendimento_numero = VALUES(atendimento_numero),
             widget_position = VALUES(widget_position),
             widget_text = VALUES(widget_text),
@@ -420,6 +438,7 @@ async function saveSchoolConfig(configData) {
         show_conteudo !== false,
         show_validador !== false,
         show_interessados !== false,
+        show_todas_parcelas !== false,
         atendimento_numero || '',
         widget_position || 'right',
         widget_text || 'Posso ajudar?',

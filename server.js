@@ -468,7 +468,8 @@ async function processBoleto(hash, session, studentId, studentName) {
                 C.DOCUMENTO,
                 C.HISTORICO_CARNE,
                 C.RECORRENTE_MSG,
-                C.ID_ALUNO_CURSO
+                C.ID_ALUNO_CURSO,
+                C.ID_CONTA
             FROM CAIXA C
             WHERE C.ID_ALUNO = ? 
               AND (C.QUITADO IS NULL OR TRIM(C.QUITADO) <> 'S')
@@ -477,7 +478,7 @@ async function processBoleto(hash, session, studentId, studentName) {
         
         const rawCaixa = await db.execute(hash, caixaQuery, [studentId]);
         
-        // Filtrar e agrupar lançamentos por curso
+        // Filtrar e agrupar lançamentos por conta/curso
         const groups = {};
         const extraCodes = [];
         
@@ -491,7 +492,7 @@ async function processBoleto(hash, session, studentId, studentName) {
                 return;
             }
             
-            const groupKey = courseId || 'geral';
+            const groupKey = row.ID_CONTA ? `conta_${row.ID_CONTA}` : (courseId ? `curso_${courseId}` : 'geral');
             if (!groups[groupKey]) {
                 groups[groupKey] = {
                     course,
