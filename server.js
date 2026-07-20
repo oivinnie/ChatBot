@@ -2523,6 +2523,23 @@ const qrcode = require('qrcode');
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+// Helper com timeout robusto para envio de mensagem via WhatsApp
+async function safeSendMessage(client, to, content, timeoutMs = 25000) {
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+            reject(new Error(`Timeout ao enviar mensagem no WhatsApp (${timeoutMs}ms)`));
+        }, timeoutMs);
+    });
+
+    try {
+        const sendPromise = client.sendMessage(to, content);
+        return await Promise.race([sendPromise, timeoutPromise]);
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
 const whatsappClients = {};
 const whatsappStatuses = {}; // hash -> status
 const whatsappQrData = {}; // hash -> qrData
@@ -2655,15 +2672,24 @@ async function initWhatsApp(schoolHash, schoolConfig) {
         deviceName: 'chatbot',
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
         authTimeoutMs: 300000,
+        takeoverOnConflict: true,
+        takeoverTimeoutMs: 0,
+        webVersionCache: {
+            type: 'remote',
+            remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html'
+        },
         puppeteer: {
             headless: true,
             executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+            protocolTimeout: 300000, // Timeout de 5min no protocolo IPC do Puppeteer
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
                 '--disable-gpu',
+                '--disable-software-rasterizer',
                 '--no-first-run',
+                '--no-zygote',
                 '--disable-extensions',
                 '--disable-default-apps',
                 '--mute-audio',
@@ -2672,7 +2698,18 @@ async function initWhatsApp(schoolHash, schoolConfig) {
                 '--disable-renderer-backgrounding',
                 '--disable-background-timer-throttling',
                 '--disable-backgrounding-occluded-windows',
-                '--disable-features=CalculateWindowOcclusionForOccludedWindows'
+                '--disable-features=CalculateWindowOcclusionForOccludedWindows,AudioServiceOutOfProcess,IsolateOrigins,site-per-process',
+                '--disable-background-networking',
+                '--disable-breakpad',
+                '--disable-component-update',
+                '--disable-domain-reliability',
+                '--disable-sync',
+                '--disable-translate',
+                '--metrics-recording-only',
+                '--no-pings',
+                '--disable-ipc-flooding-protection',
+                '--disable-hang-monitor',
+                '--js-flags=--max-old-space-size=512'
             ]
         }
     });
@@ -2709,13 +2746,31 @@ async function initWhatsApp(schoolHash, schoolConfig) {
         }
     });
 
-    client.on('ready', () => {
+    client.on('ready', async () => {
         console.log(`[${schoolConfig.nome_fantasia || schoolHash}] WhatsApp Client conectado e pronto!`);
         whatsappStatuses[schoolHash] = 'CONNECTED';
         whatsappQrData[schoolHash] = null;
         isInitializingWhatsApp[schoolHash] = false;
         whatsappManualInitRequested[schoolHash] = false; // Reset da flag de inicialização manual
         clientInitTime[schoolHash] = Date.now(); // Grava timestamp de conexão pronta
+
+        // Otimização de requisições de página para reduzir uso de memória e CPU
+        if (client.pupPage) {
+            try {
+                await client.pupPage.setRequestInterception(true);
+                client.pupPage.on('request', (req) => {
+                    const resourceType = req.resourceType();
+                    // Aborta requisições de mídia pesada (vídeos/áudios) e fontes extras desnecessárias
+                    if (['media', 'font'].includes(resourceType)) {
+                        req.abort();
+                    } else {
+                        req.continue();
+                    }
+                });
+            } catch (pErr) {
+                // Ignora se não for possível configurar interceptação
+            }
+        }
     });
 
     client.on('authenticated', () => {
@@ -2789,21 +2844,24 @@ async function initWhatsApp(schoolHash, schoolConfig) {
             if (result && result.response) {
                 sendingAutomatedFor.add(msg.from);
                 try {
-                    // Envia a resposta instantaneamente para todos os contatos, eliminando as chamadas lentas do Puppeteer
-                    await client.sendMessage(msg.from, result.response);
+                    // Envia a resposta usando o helper com timeout seguro para não travar o processo em caso de congelamento do Puppeteer
+                    await safeSendMessage(client, msg.from, result.response, 25000);
                 } catch (sendErr) {
                     console.error(`[${schoolConfig.nome_fantasia || schoolHash}] Erro crítico ao enviar mensagem de WhatsApp para ${msg.from}:`, sendErr.message);
                     
-                    // Se o erro indicar que o navegador ou página do Puppeteer caiu, reinicia o cliente automaticamente
+                    // Se o erro indicar travamento/timeout ou queda do navegador, reinicia o cliente automaticamente
                     const isCrash = sendErr.message && (
                         sendErr.message.includes('closed') || 
                         sendErr.message.includes('Protocol error') || 
                         sendErr.message.includes('Navigation failed') ||
                         sendErr.message.includes('Target closed') ||
-                        sendErr.message.includes('destroyed')
+                        sendErr.message.includes('destroyed') ||
+                        sendErr.message.includes('timed out') ||
+                        sendErr.message.includes('callFunctionOn') ||
+                        sendErr.message.includes('Timeout')
                     );
                     if (isCrash) {
-                        console.warn(`[WhatsApp - ${schoolHash}] Falha crítica de comunicação com o navegador detectada! Tentando reestabelecer o serviço...`);
+                        console.warn(`[WhatsApp - ${schoolHash}] Falha crítica ou timeout de comunicação com o navegador detectado! Reiniciando cliente...`);
                         setTimeout(async () => {
                             try {
                                 await destroyWhatsAppClient(schoolHash);
