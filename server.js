@@ -505,21 +505,22 @@ async function processBoleto(hash, session, studentId, studentName) {
         const config = (await ConfigService.getSchoolConfig(hash)) || {};
         const showTodasParcelas = config.show_todas_parcelas !== false;
 
-        let response = '';
+        const messageParts = [];
         const groupIds = Object.keys(groups);
         
         if (groupIds.length > 0) {
-            response = showTodasParcelas 
-                ? `Aqui estão as parcelas pendentes para **${studentName}**:\n\n`
-                : `Aqui está a sua próxima parcela em aberto para **${studentName}**:\n\n`;
+            const headerText = showTodasParcelas 
+                ? `Aqui estão as parcelas pendentes para **${studentName}**:`
+                : `Aqui está a sua próxima parcela em aberto para **${studentName}**:`;
+            
+            messageParts.push(headerText);
             
             groupIds.forEach(gId => {
                 const group = groups[gId];
-                response += `📄 **Contrato: ${group.course.contrato} - ${group.course.nome}**\n`;
-                
                 const itemsToShow = showTodasParcelas ? group.items : group.items.slice(0, 1);
                 
                 itemsToShow.forEach((row, index) => {
+                    let itemText = `📄 **Contrato: ${group.course.contrato} - ${group.course.nome}**\n`;
                     const vencimento = formatDate(row.VENCIMENTO);
                     const valor = formatCurrency(row.VALOR);
                     let link = row.PJ_LINK ? row.PJ_LINK.toString().trim() : '';
@@ -531,18 +532,19 @@ async function processBoleto(hash, session, studentId, studentName) {
                     const isRecorrente = group.course.pagRecorrente && group.course.pagRecorrente.toUpperCase() === 'S';
 
                     if (isRecorrente) {
-                        response += `${index + 1} - **${historico}**\n`;
-                        response += `   📅 Vencimento: ${vencimento}\n`;
-                        response += `   💰 Valor: ${valor}\n`;
-                        response += `   💳 *Esta mensalidade possui cobrança recorrente e será cobrada automaticamente no cartão de crédito cadastrado (Boleto não enviado).*\n\n`;
+                        itemText += `${index + 1} - **${historico}**\n`;
+                        itemText += `   📅 Vencimento: ${vencimento}\n`;
+                        itemText += `   💰 Valor: ${valor}\n`;
+                        itemText += `   💳 *Esta mensalidade possui cobrança recorrente e será cobrada automaticamente no cartão de crédito cadastrado (Boleto não enviado).*`;
+                        messageParts.push(itemText);
                     } else if (link) {
-                        response += `${index + 1} - **${historico}**\n`;
-                        response += `   📅 Vencimento: ${vencimento}\n`;
-                        response += `   💰 Valor: ${valor}\n`;
+                        itemText += `${index + 1} - **${historico}**\n`;
+                        itemText += `   📅 Vencimento: ${vencimento}\n`;
+                        itemText += `   💰 Valor: ${valor}\n`;
                         if (isFormatoB) {
-                            response += `   🔗 [Clique aqui para abrir o boleto](${link})\n`;
+                            itemText += `   🔗 [Clique aqui para abrir o boleto](${link})\n`;
                         } else {
-                            response += `   🔗 [Clique aqui para pagar via PIX](${link})\n`;
+                            itemText += `   🔗 [Clique aqui para pagar via PIX](${link})\n`;
                         }
 
                         let linhaDig = row.PJ_LINHA_DIGITAVEL ? row.PJ_LINHA_DIGITAVEL.toString().trim() : '';
@@ -566,43 +568,43 @@ async function processBoleto(hash, session, studentId, studentName) {
                         }
                         
                         if (linhaDig) {
-                            response += `   💳 *Linha Digitável (Copia e Cola enviada abaixo):*\n`;
-                            extraCodes.push(linhaDig);
+                            itemText += `   💳 *Linha Digitável (Copia e Cola enviada abaixo):*\n`;
                         }
                         
                         if (pixCopiaCola) {
-                            response += `   🔑 *PIX Copia e Cola (enviado abaixo):*\n`;
-                            extraCodes.push(pixCopiaCola);
+                            itemText += `   🔑 *PIX Copia e Cola (enviado abaixo):*\n`;
                         }
-                        response += `\n`;
+
+                        messageParts.push(itemText.trim());
+
+                        if (linhaDig) {
+                            messageParts.push(linhaDig);
+                        }
+
+                        if (pixCopiaCola) {
+                            messageParts.push(pixCopiaCola);
+                        }
                     } else {
-                        response += `${index + 1} - **${historico}**\n`;
-                        response += `   📅 Vencimento: ${vencimento}\n`;
-                        response += `   💰 Valor: ${valor}\n`;
-                        response += `   📞 Entre em contato com a secretaria da escola para mais informações\n\n`;
+                        itemText += `${index + 1} - **${historico}**\n`;
+                        itemText += `   📅 Vencimento: ${vencimento}\n`;
+                        itemText += `   💰 Valor: ${valor}\n`;
+                        itemText += `   📞 Entre em contato com a secretaria da escola para mais informações`;
+                        messageParts.push(itemText);
                     }
                 });
             });
         }
 
         if (hasAcordoCancelamento) {
-            if (response) {
-                response += `⚠️ **Importante:** Identificamos contrato(s) com a situação "Acordo Cancelamento". Por favor, entre em contato com a escola para mais informações.\n\n`;
-            } else {
-                response = `Por favor, entre em contato com a escola para mais informações.`;
-                return response;
-            }
-        } else if (!response) {
+            messageParts.push(`⚠️ **Importante:** Identificamos contrato(s) com a situação "Acordo Cancelamento". Por favor, entre em contato com a escola para mais informações.`);
+        }
+
+        if (messageParts.length === 0) {
             return `Não encontrei nenhum boleto pendente cadastrado para **${studentName}**. 🎉\n\nSe precisar de algo mais, escolha outra opção ou digite **Sair**.`;
         }
 
-        response += `Se precisar de algo mais, escolha outra opção ou digite **Sair**.`;
-
-        if (extraCodes.length > 0) {
-            return [response, ...extraCodes];
-        }
-
-        return response;
+        messageParts.push(`Se precisar de algo mais, escolha outra opção ou digite **Sair**.`);
+        return messageParts;
     } catch (err) {
         console.error('Erro ao buscar boletos:', err);
         return `Desculpe, ocorreu um erro ao consultar os boletos. Por favor, tente novamente mais tarde.`;
