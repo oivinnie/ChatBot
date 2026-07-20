@@ -379,9 +379,9 @@ async function getGreetingMessage(hash, studentId = null, studentName = null) {
     });
 
     if (studentId && studentName) {
-        response += `\nDigite a opção desejada ou **Sair** para trocar de aluno.`;
+        response += `\nDigite a opção desejada, **menu** para o menu principal ou **Sair** para trocar de aluno.`;
     } else {
-        response += `\nDigite a opção desejada👇`;
+        response += `\nDigite a opção desejada ou **menu** para voltar ao menu principal👇`;
     }
 
     const extraButtons = [];
@@ -1051,11 +1051,22 @@ async function chatHandler(req, res) {
     session.isProcessing = true;
     session.processingStartedAt = Date.now();
 
-    // Sobrescreve res.json para liberar a trava de processamento ao responder
+    // Sobrescreve res.json para liberar a trava de processamento ao responder e adicionar rodapé de instrução menu
     const originalJson = res.json;
     res.json = function(data) {
         session.isProcessing = false;
-        return originalJson.apply(this, arguments);
+        if (data && typeof data.response === 'string' && data.response.trim()) {
+            const isIdentificationStep = [
+                'AWAITING_IDENTIFICATION',
+                'AWAITING_STUDENT_SELECTION',
+                'AWAITING_UNIT_SELECTION'
+            ].includes(session.step);
+
+            if (!isIdentificationStep && !/\bmenu\b/i.test(data.response)) {
+                data.response = `${data.response.trim()}\n\n💡 *Digite "menu" a qualquer momento para voltar ao menu principal.*`;
+            }
+        }
+        return originalJson.call(this, data);
     };
 
     try {
@@ -1130,6 +1141,7 @@ async function chatHandler(req, res) {
         session.intent = null;
         session.students = [];
         session.student = null;
+        session.justLoggedOut = true;
         delete session.targetSchoolHash;
         delete session.matchingStudents;
         delete session.matchingSchools;
@@ -1183,6 +1195,7 @@ async function chatHandler(req, res) {
         if (cleanText === indexSair || cleanText === 'sair' || cleanText === 'limpar' || cleanText === 'novo') {
             session.step = 'WELCOME';
             session.student = null;
+            session.justLoggedOut = true;
             delete session.targetSchoolHash;
             delete session.matchingStudents;
             delete session.matchingSchools;
@@ -1250,6 +1263,7 @@ async function chatHandler(req, res) {
         if (cleanText === indexSair || cleanText === 'sair' || cleanText === 'limpar' || cleanText === 'novo') {
             session.step = 'WELCOME';
             session.student = null;
+            session.justLoggedOut = true;
             delete session.targetSchoolHash;
             delete session.matchingStudents;
             delete session.matchingSchools;
@@ -1351,6 +1365,7 @@ async function chatHandler(req, res) {
         }
 
         if (selectedOption) {
+            session.justLoggedOut = false;
             if (selectedOption.id === 'financeiro') {
                 session.intent = 'boleto';
                 if (session.student) {
@@ -1507,7 +1522,18 @@ async function chatHandler(req, res) {
             }
         } else {
             const greeting = await getGreetingMessage(session.hash, session.student ? session.student.id : null, session.student ? session.student.nome : null);
-            const responseText = `Desculpe, não entendi o que você quis dizer. 🤔\n\n${greeting.responseText}`;
+            
+            const greetingsWords = ['oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'hey', 'hello', 'inicio', 'iniciar', 'start', 'menu', 'ajuda'];
+            const isGreeting = greetingsWords.includes(cleanText);
+
+            let responseText;
+            if (session.justLoggedOut || isGreeting) {
+                responseText = greeting.responseText;
+            } else {
+                responseText = `Desculpe, não entendi o que você quis dizer. 🤔\n\n${greeting.responseText}`;
+            }
+            session.justLoggedOut = false;
+
             return res.json({
                 response: responseText,
                 options: greeting.options,
