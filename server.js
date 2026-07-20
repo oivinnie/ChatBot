@@ -2549,8 +2549,32 @@ const qrcode = require('qrcode');
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-// Helper com timeout robusto para envio de mensagem via WhatsApp
-async function safeSendMessage(client, to, content, timeoutMs = 25000) {
+// Helper com timeout robusto para envio de mensagem via WhatsApp (suporta client ou objeto msg de resposta)
+async function safeSendMessage(clientOrMsg, toOrContent, contentOrTimeout = 25000, optionalTimeout = 25000) {
+    let content;
+    let timeoutMs;
+    let sendPromise;
+
+    if (clientOrMsg && typeof clientOrMsg.reply === 'function') {
+        // Uso direto da mensagem recebida (preserva conversas @lid e grupos)
+        content = toOrContent;
+        timeoutMs = typeof contentOrTimeout === 'number' ? contentOrTimeout : 25000;
+        sendPromise = (async () => {
+            try {
+                return await clientOrMsg.reply(content);
+            } catch (errReply) {
+                const chat = await clientOrMsg.getChat();
+                return await chat.sendMessage(content);
+            }
+        })();
+    } else {
+        // Uso do cliente com destinatário JID
+        const to = toOrContent;
+        content = contentOrTimeout;
+        timeoutMs = typeof optionalTimeout === 'number' ? optionalTimeout : 25000;
+        sendPromise = clientOrMsg.sendMessage(to, content);
+    }
+
     let timeoutId;
     const timeoutPromise = new Promise((_, reject) => {
         timeoutId = setTimeout(() => {
@@ -2559,7 +2583,6 @@ async function safeSendMessage(client, to, content, timeoutMs = 25000) {
     });
 
     try {
-        const sendPromise = client.sendMessage(to, content);
         return await Promise.race([sendPromise, timeoutPromise]);
     } finally {
         clearTimeout(timeoutId);
@@ -2674,6 +2697,7 @@ async function destroyWhatsAppClient(schoolHash) {
         }
         delete whatsappClients[schoolHash];
     }
+    isInitializingWhatsApp[schoolHash] = false; // Reseta a trava de inicialização para permitir recriação
 }
 
 async function initWhatsApp(schoolHash, schoolConfig) {
@@ -2685,6 +2709,7 @@ async function initWhatsApp(schoolHash, schoolConfig) {
 
     // Garante a destruição de qualquer cliente anterior da mesma escola
     await destroyWhatsAppClient(schoolHash);
+    isInitializingWhatsApp[schoolHash] = true; // Mantém a trava após o destroy
 
     console.log(`[${schoolConfig.nome_fantasia || schoolHash}] Inicializando WhatsApp Client...`);
     whatsappStatuses[schoolHash] = 'INITIALIZING';
@@ -2801,6 +2826,7 @@ async function initWhatsApp(schoolHash, schoolConfig) {
                 }
             } catch (reconErr) {
                 console.error(`[WhatsApp - ${schoolHash}] Falha ao tentar auto-reconexão após queda de conexão:`, reconErr.message);
+                isInitializingWhatsApp[schoolHash] = false;
             }
         }, 10000); // Aguarda 10 segundos para restabelecer
     });
@@ -2835,8 +2861,8 @@ async function initWhatsApp(schoolHash, schoolConfig) {
             if (result && result.response) {
                 sendingAutomatedFor.add(msg.from);
                 try {
-                    // Envia a resposta usando o helper com timeout seguro para não travar o processo em caso de congelamento do Puppeteer
-                    await safeSendMessage(client, msg.from, result.response, 25000);
+                    // Responde diretamente no objeto msg (compatível com contatos @lid)
+                    await safeSendMessage(msg, result.response, 25000);
                 } catch (sendErr) {
                     console.error(`[${schoolConfig.nome_fantasia || schoolHash}] Erro crítico ao enviar mensagem de WhatsApp para ${msg.from}:`, sendErr.message);
                     
@@ -2855,13 +2881,16 @@ async function initWhatsApp(schoolHash, schoolConfig) {
                         console.warn(`[WhatsApp - ${schoolHash}] Falha crítica ou timeout de comunicação com o navegador detectado! Reiniciando cliente...`);
                         setTimeout(async () => {
                             try {
+                                isInitializingWhatsApp[schoolHash] = false;
                                 await destroyWhatsAppClient(schoolHash);
+                                isInitializingWhatsApp[schoolHash] = false;
                                 const freshConfig = await ConfigService.getSchoolConfig(schoolHash);
                                 if (freshConfig) {
                                     await initWhatsApp(schoolHash, freshConfig);
                                 }
                             } catch (reconErr) {
                                 console.error(`[WhatsApp - ${schoolHash}] Erro ao tentar reinicializar cliente após crash do Puppeteer:`, reconErr.message);
+                                isInitializingWhatsApp[schoolHash] = false;
                             }
                         }, 5000);
                     }
