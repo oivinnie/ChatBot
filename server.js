@@ -545,14 +545,8 @@ async function processBoleto(hash, session, studentId, studentName) {
                             response += `   🔗 [Clique aqui para pagar via PIX](${link})\n`;
                         }
 
-                        if (isFormatoB && row.PJ_LINHA_DIGITAVEL) {
-                            const linhaDig = row.PJ_LINHA_DIGITAVEL.toString().trim();
-                            if (linhaDig) {
-                                response += `   💳 *Linha Digitável (Copia e Cola enviada abaixo):*\n`;
-                                extraCodes.push(linhaDig);
-                            }
-                        }
-                        
+                        let linhaDig = row.PJ_LINHA_DIGITAVEL ? row.PJ_LINHA_DIGITAVEL.toString().trim() : '';
+
                         // Procurar por PIX Copia e Cola
                         let pixCopiaCola = null;
                         const pixFields = ['PJ_LINHA_DIGITAVEL', 'AUTENTICACAO', 'DOCUMENTO', 'HISTORICO_CARNE', 'RECORRENTE_MSG'];
@@ -564,6 +558,16 @@ async function processBoleto(hash, session, studentId, studentName) {
                                     break;
                                 }
                             }
+                        }
+                        
+                        if (linhaDig && linhaDig.startsWith('000201') && linhaDig.length >= 80) {
+                            if (!pixCopiaCola) pixCopiaCola = linhaDig;
+                            linhaDig = '';
+                        }
+                        
+                        if (linhaDig) {
+                            response += `   💳 *Linha Digitável (Copia e Cola enviada abaixo):*\n`;
+                            extraCodes.push(linhaDig);
                         }
                         
                         if (pixCopiaCola) {
@@ -1063,9 +1067,20 @@ async function chatHandler(req, res) {
     res.json = function(data) {
         session.isProcessing = false;
         if (data) {
+            const isWhatsApp = req.body && req.body.isWhatsApp;
+            
             if (Array.isArray(data.response)) {
-                data.response = data.response.join('\n\n');
+                if (isWhatsApp) {
+                    const noFooterSteps = ['WELCOME', 'AWAITING_IDENTIFICATION', 'AWAITING_STUDENT_SELECTION', 'AWAITING_UNIT_SELECTION'];
+                    const isNoFooterStep = noFooterSteps.includes(session.step);
+                    if (!isNoFooterStep && data.response[0] && !/\bmenu\b/i.test(data.response[0])) {
+                        data.response[0] = `${data.response[0].trim()}\n\n💡 *Digite "menu" a qualquer momento para voltar ao menu principal.*`;
+                    }
+                } else {
+                    data.response = data.response.join('\n\n');
+                }
             }
+
             if (typeof data.response === 'string' && data.response.trim()) {
                 const noFooterSteps = [
                     'WELCOME',
@@ -2058,7 +2073,7 @@ app.post('/api/chat', chatHandler);
 
 async function processChatMessage(sessionId, message, hash) {
     return new Promise((resolve) => {
-        const req = { body: { sessionId, message, hash } };
+        const req = { body: { sessionId, message, hash, isWhatsApp: true } };
         const res = {
             status: () => res,
             json: (data) => resolve(data)
