@@ -72,6 +72,7 @@ const showPlataforma = document.getElementById('showPlataforma');
 const showConteudo = document.getElementById('showConteudo');
 const showValidador = document.getElementById('showValidador');
 const showInteressados = document.getElementById('showInteressados');
+const showTodasParcelas = document.getElementById('showTodasParcelas');
 
 const widgetPosition = document.getElementById('widgetPosition');
 const widgetText = document.getElementById('widgetText');
@@ -108,7 +109,7 @@ function disableConfigFields(disabled) {
         portalAlunoLink, atendimentoNumero, cadastroInteressadosLink,
         themeSelect, botEmoji, showFinanceiro,
         showHorarios, showBoletim, showPlataforma, showConteudo,
-        showValidador, showInteressados, widgetPosition, widgetText, testBtn, saveBtn,
+        showValidador, showInteressados, showTodasParcelas, widgetPosition, widgetText, testBtn, saveBtn,
         document.getElementById('waRefreshBtn'), document.getElementById('waDisconnectBtn')
     ];
     fields.forEach(field => {
@@ -202,6 +203,7 @@ async function loadConfig() {
         if (showConteudo) showConteudo.checked = config.show_conteudo !== false;
         if (showValidador) showValidador.checked = config.show_validador !== false;
         if (showInteressados) showInteressados.checked = config.show_interessados !== false;
+        if (showTodasParcelas) showTodasParcelas.checked = config.show_todas_parcelas !== false;
 
         if (widgetPosition) widgetPosition.value = config.widget_position || 'right';
         if (widgetText) widgetText.value = config.widget_text || 'Posso ajudar?';
@@ -431,6 +433,7 @@ async function saveConfig() {
         show_conteudo: showConteudo ? showConteudo.checked : true,
         show_validador: showValidador ? showValidador.checked : true,
         show_interessados: showInteressados ? showInteressados.checked : true,
+        show_todas_parcelas: showTodasParcelas ? showTodasParcelas.checked : true,
         widget_position: widgetPosition ? widgetPosition.value : 'right',
         widget_text: widgetText ? widgetText.value : 'Posso ajudar?'
     };

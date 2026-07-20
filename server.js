@@ -278,36 +278,7 @@ async function getAvailableOptions(hash, studentId = null) {
     }
     // 5. Conteúdo Online
     if (showConteudo) {
-        let hasContent = false;
-        if (studentId) {
-            try {
-                const queryContent = `
-                    SELECT COUNT(*) AS CNT 
-                    FROM ALUNO_MODULOS AM 
-                    JOIN MODULOS_MATERIAIS MM ON AM.ID_MODULO = MM.ID_MODULO 
-                    WHERE AM.ID_ALUNO = ? AND AM.SITUACAO = 'Em Andamento'
-                `;
-                const contentResult = await db.execute(hash, queryContent, [studentId]);
-                if (contentResult.length > 0 && contentResult[0].CNT > 0) {
-                    hasContent = true;
-                }
-            } catch (err) {
-                console.error('Erro ao verificar se possui conteúdo online:', err);
-            }
-        } else {
-            // Global check
-            try {
-                const result = await db.execute(hash, 'SELECT COUNT(*) AS CNT FROM MODULOS_MATERIAIS');
-                if (result.length > 0 && result[0].CNT > 0) {
-                    hasContent = true;
-                }
-            } catch (err) {
-                console.error('Erro ao verificar material online global:', err);
-            }
-        }
-        if (hasContent) {
-            options.push({ id: 'conteudo', label: 'Conteúdo Online' });
-        }
+        options.push({ id: 'conteudo', label: 'Conteúdo Online' });
     }
 
     // 6. Validador de Certificado (Sempre visível se showValidador estiver ativo)
@@ -508,6 +479,7 @@ async function processBoleto(hash, session, studentId, studentName) {
         
         // Filtrar e agrupar lançamentos por curso
         const groups = {};
+        const extraCodes = [];
         
         rawCaixa.forEach(row => {
             const courseId = row.ID_ALUNO_CURSO;
@@ -529,17 +501,24 @@ async function processBoleto(hash, session, studentId, studentName) {
             groups[groupKey].items.push(row);
         });
 
+        const config = (await ConfigService.getSchoolConfig(hash)) || {};
+        const showTodasParcelas = config.show_todas_parcelas !== false;
+
         let response = '';
         const groupIds = Object.keys(groups);
         
         if (groupIds.length > 0) {
-            response = `Aqui estão as parcelas pendentes para **${studentName}**:\n\n`;
+            response = showTodasParcelas 
+                ? `Aqui estão as parcelas pendentes para **${studentName}**:\n\n`
+                : `Aqui está a sua próxima parcela em aberto para **${studentName}**:\n\n`;
             
             groupIds.forEach(gId => {
                 const group = groups[gId];
                 response += `📄 **Contrato: ${group.course.contrato} - ${group.course.nome}**\n`;
                 
-                group.items.forEach((row, index) => {
+                const itemsToShow = showTodasParcelas ? group.items : group.items.slice(0, 1);
+                
+                itemsToShow.forEach((row, index) => {
                     const vencimento = formatDate(row.VENCIMENTO);
                     const valor = formatCurrency(row.VALOR);
                     let link = row.PJ_LINK ? row.PJ_LINK.toString().trim() : '';
@@ -550,7 +529,6 @@ async function processBoleto(hash, session, studentId, studentName) {
                     
                     const isRecorrente = group.course.pagRecorrente && group.course.pagRecorrente.toUpperCase() === 'S';
 
-                    // Mostra o número como normal (ex: 1 - ), não emoji
                     if (isRecorrente) {
                         response += `${index + 1} - **${historico}**\n`;
                         response += `   📅 Vencimento: ${vencimento}\n`;
@@ -565,8 +543,13 @@ async function processBoleto(hash, session, studentId, studentName) {
                         } else {
                             response += `   🔗 [Clique aqui para pagar via PIX](${link})\n`;
                         }
+
                         if (isFormatoB && row.PJ_LINHA_DIGITAVEL) {
-                            response += `   💳 Linha Digitável: \`${row.PJ_LINHA_DIGITAVEL.toString().trim()}\`\n`;
+                            const linhaDig = row.PJ_LINHA_DIGITAVEL.toString().trim();
+                            if (linhaDig) {
+                                response += `   💳 *Linha Digitável (Copia e Cola enviada abaixo):*\n`;
+                                extraCodes.push(linhaDig);
+                            }
                         }
                         
                         // Procurar por PIX Copia e Cola
@@ -583,7 +566,8 @@ async function processBoleto(hash, session, studentId, studentName) {
                         }
                         
                         if (pixCopiaCola) {
-                            response += `   🔑 PIX Copia e Cola: \`${pixCopiaCola}\`\n`;
+                            response += `   🔑 *PIX Copia e Cola (enviado abaixo):*\n`;
+                            extraCodes.push(pixCopiaCola);
                         }
                         response += `\n`;
                     } else {
@@ -608,6 +592,11 @@ async function processBoleto(hash, session, studentId, studentName) {
         }
 
         response += `Se precisar de algo mais, escolha outra opção ou digite **Sair**.`;
+
+        if (extraCodes.length > 0) {
+            return [response, ...extraCodes];
+        }
+
         return response;
     } catch (err) {
         console.error('Erro ao buscar boletos:', err);
@@ -701,20 +690,38 @@ async function processConteudo(hash, session, studentId, studentName) {
             MM.IMAGEM
         FROM ALUNO_MODULOS AM
         JOIN MODULOS M ON AM.ID_MODULO = M.ID_MODULO
-        JOIN MODULOS_MATERIAIS MM ON AM.ID_MODULO = MM.ID_MODULO
-        WHERE AM.ID_ALUNO = ? AND AM.SITUACAO = 'Em Andamento'
+        LEFT JOIN MODULOS_MATERIAIS MM ON AM.ID_MODULO = MM.ID_MODULO
+        WHERE AM.ID_ALUNO = ? AND (UPPER(AM.SITUACAO) LIKE '%ANDAMENTO%' OR UPPER(AM.SITUACAO) LIKE '%CURSANDO%' OR AM.SITUACAO IS NULL OR AM.SITUACAO = '' OR AM.SITUACAO = '1')
     `;
     
     try {
-        const rows = await db.execute(hash, query, [studentId]);
+        let rows = await db.execute(hash, query, [studentId]);
         if (rows.length === 0) {
-            return `Não encontrei nenhum conteúdo online disponível para o módulo em andamento de **${studentName}**. 📚\n\nSe precisar de algo mais, escolha outra opção ou digite **Sair**.`;
+            const fallbackQuery = `
+                SELECT 
+                    AM.ID_MODULO,
+                    M.DESCRICAO AS MODULO_NOME,
+                    MM.DESCRICAO AS MATERIAL_DESCRICAO,
+                    MM.LINK AS MATERIAL_LINK,
+                    MM.IMAGEM
+                FROM ALUNO_MODULOS AM
+                JOIN MODULOS M ON AM.ID_MODULO = M.ID_MODULO
+                LEFT JOIN MODULOS_MATERIAIS MM ON AM.ID_MODULO = MM.ID_MODULO
+                WHERE AM.ID_ALUNO = ?
+            `;
+            rows = await db.execute(hash, fallbackQuery, [studentId]);
+        }
+
+        const validRows = rows.filter(r => (r.MATERIAL_LINK && r.MATERIAL_LINK.toString().trim()) || r.IMAGEM);
+        
+        if (validRows.length === 0) {
+            return `Não encontrei nenhum conteúdo online disponível para os módulos do aluno **${studentName}**. 📚\n\nSe precisar de algo mais, escolha outra opção ou digite **Sair**.`;
         }
         
         let response = `Aqui está o conteúdo online do seu módulo em andamento, **${studentName}**:\n\n`;
         const modules = {};
-        rows.forEach(row => {
-            const modNome = row.MODULO_NOME.toString().trim();
+        validRows.forEach(row => {
+            const modNome = row.MODULO_NOME ? row.MODULO_NOME.toString().trim() : 'Módulo';
             if (!modules[modNome]) {
                 modules[modNome] = [];
             }
@@ -1054,17 +1061,22 @@ async function chatHandler(req, res) {
     const originalJson = res.json;
     res.json = function(data) {
         session.isProcessing = false;
-        if (data && typeof data.response === 'string' && data.response.trim()) {
-            const noFooterSteps = [
-                'WELCOME',
-                'AWAITING_IDENTIFICATION',
-                'AWAITING_STUDENT_SELECTION',
-                'AWAITING_UNIT_SELECTION'
-            ];
-            const isNoFooterStep = noFooterSteps.includes(session.step);
+        if (data) {
+            if (Array.isArray(data.response)) {
+                data.response = data.response.join('\n\n');
+            }
+            if (typeof data.response === 'string' && data.response.trim()) {
+                const noFooterSteps = [
+                    'WELCOME',
+                    'AWAITING_IDENTIFICATION',
+                    'AWAITING_STUDENT_SELECTION',
+                    'AWAITING_UNIT_SELECTION'
+                ];
+                const isNoFooterStep = noFooterSteps.includes(session.step);
 
-            if (!isNoFooterStep && !/\bmenu\b/i.test(data.response)) {
-                data.response = `${data.response.trim()}\n\n💡 *Digite "menu" a qualquer momento para voltar ao menu principal.*`;
+                if (!isNoFooterStep && !/\bmenu\b/i.test(data.response)) {
+                    data.response = `${data.response.trim()}\n\n💡 *Digite "menu" a qualquer momento para voltar ao menu principal.*`;
+                }
             }
         }
         return originalJson.call(this, data);
@@ -2246,6 +2258,7 @@ app.get('/api/config', async (req, res) => {
                     show_conteudo: school.show_conteudo,
                     show_validador: school.show_validador,
                     show_interessados: school.show_interessados,
+                    show_todas_parcelas: school.show_todas_parcelas,
                     atendimento_numero: school.atendimento_numero,
                     widget_position: school.widget_position,
                     widget_text: school.widget_text,
@@ -2308,6 +2321,7 @@ app.post('/api/config', async (req, res) => {
             show_conteudo: show_conteudo !== false,
             show_validador: show_validador !== false,
             show_interessados: show_interessados !== false,
+            show_todas_parcelas: show_todas_parcelas !== false,
             atendimento_numero: atendimento_numero || '',
             widget_position: widget_position || 'right',
             widget_text: widget_text || 'Posso ajudar?'
@@ -2790,7 +2804,15 @@ async function initWhatsApp(schoolHash, schoolConfig) {
                     sendingAutomatedFor.add(remoteJid);
                     try {
                         await queueSendMessage(schoolHash, async () => {
-                            await sock.sendMessage(remoteJid, { text: result.response });
+                            const messagesToSend = Array.isArray(result.response) ? result.response : [result.response];
+                            for (const textPart of messagesToSend) {
+                                if (textPart && textPart.trim()) {
+                                    await sock.sendMessage(remoteJid, { text: textPart.trim() });
+                                    if (messagesToSend.length > 1) {
+                                        await delay(400);
+                                    }
+                                }
+                            }
                         });
                     } catch (sendErr) {
                         console.error(`[${schoolConfig.nome_fantasia || schoolHash}] Erro ao enviar mensagem no Baileys para ${remoteJid}:`, sendErr.message);
