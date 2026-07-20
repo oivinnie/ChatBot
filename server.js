@@ -1023,19 +1023,14 @@ async function chatHandler(req, res) {
         return res.status(400).json({ error: 'Parâmetros inválidos.' });
     }
 
-    // Evita processamento concorrente para a mesma sessão (corrida de mensagens no WhatsApp)
+    // Se a sessão estiver processando uma mensagem anterior, aguarda brevemente a conclusão em vez de descartar
     if (sessions[sessionId] && sessions[sessionId].isProcessing) {
-        const elapsed = Date.now() - (sessions[sessionId].processingStartedAt || 0);
-        if (elapsed < 10000) { // 10 segundos de tolerância
-            console.log(`[Session Lock] Ignorando mensagem concorrente para a sessão ${sessionId}: "${message}"`);
-            return res.json({
-                response: null,
-                options: [],
-                isIdentified: false,
-                ignored: true
-            });
-        } else {
-            console.warn(`[Session Lock] Trava expirada (10s) detectada para a sessão ${sessionId}. Forçando liberação.`);
+        let retries = 0;
+        while (sessions[sessionId] && sessions[sessionId].isProcessing && retries < 6) {
+            await delay(500);
+            retries++;
+        }
+        if (sessions[sessionId]) {
             sessions[sessionId].isProcessing = false;
         }
     }
@@ -2036,12 +2031,13 @@ async function chatHandler(req, res) {
     }
     } catch (err) {
         console.error('Erro grave no processamento do chatHandler:', err);
-        if (sessions[sessionId]) {
-            sessions[sessionId].isProcessing = false;
-        }
         try {
             return res.status(500).json({ error: 'Erro interno ao processar mensagem.' });
         } catch (resErr) {}
+    } finally {
+        if (sessions[sessionId]) {
+            sessions[sessionId].isProcessing = false;
+        }
     }
 }
 
@@ -2556,26 +2552,27 @@ const qrcode = require('qrcode');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 // Helper com timeout robusto e retry para envio de mensagem via WhatsApp
-async function safeSendMessage(clientOrMsg, toOrContent, contentOrTimeout = 45000, optionalTimeout = 45000) {
+async function safeSendMessage(clientOrMsg, toOrContent, contentOrTimeout = 15000, optionalTimeout = 15000) {
     let content;
     let timeoutMs;
     let sendPromiseFn;
 
-    if (clientOrMsg && typeof clientOrMsg.reply === 'function') {
+    if (clientOrMsg && typeof clientOrMsg.getChat === 'function') {
         content = toOrContent;
-        timeoutMs = typeof contentOrTimeout === 'number' ? contentOrTimeout : 45000;
+        timeoutMs = typeof contentOrTimeout === 'number' ? contentOrTimeout : 15000;
         sendPromiseFn = async () => {
             try {
-                return await clientOrMsg.reply(content);
-            } catch (errReply) {
                 const chat = await clientOrMsg.getChat();
                 return await chat.sendMessage(content);
+            } catch (errChat) {
+                const to = clientOrMsg.from || clientOrMsg.to;
+                return await clientOrMsg.client.sendMessage(to, content);
             }
         };
     } else {
         const to = toOrContent;
         content = contentOrTimeout;
-        timeoutMs = typeof optionalTimeout === 'number' ? optionalTimeout : 45000;
+        timeoutMs = typeof optionalTimeout === 'number' ? optionalTimeout : 15000;
         sendPromiseFn = async () => clientOrMsg.sendMessage(to, content);
     }
 
