@@ -2700,10 +2700,6 @@ async function initWhatsApp(schoolHash, schoolConfig) {
         authTimeoutMs: 300000,
         takeoverOnConflict: true,
         takeoverTimeoutMs: 0,
-        webVersionCache: {
-            type: 'remote',
-            remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html'
-        },
         puppeteer: {
             headless: true,
             executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
@@ -2713,9 +2709,7 @@ async function initWhatsApp(schoolHash, schoolConfig) {
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
                 '--disable-gpu',
-                '--disable-software-rasterizer',
                 '--no-first-run',
-                '--no-zygote',
                 '--disable-extensions',
                 '--disable-default-apps',
                 '--mute-audio',
@@ -2724,18 +2718,7 @@ async function initWhatsApp(schoolHash, schoolConfig) {
                 '--disable-renderer-backgrounding',
                 '--disable-background-timer-throttling',
                 '--disable-backgrounding-occluded-windows',
-                '--disable-features=CalculateWindowOcclusionForOccludedWindows,AudioServiceOutOfProcess,IsolateOrigins,site-per-process',
-                '--disable-background-networking',
-                '--disable-breakpad',
-                '--disable-component-update',
-                '--disable-domain-reliability',
-                '--disable-sync',
-                '--disable-translate',
-                '--metrics-recording-only',
-                '--no-pings',
-                '--disable-ipc-flooding-protection',
-                '--disable-hang-monitor',
-                '--js-flags=--max-old-space-size=512'
+                '--disable-features=CalculateWindowOcclusionForOccludedWindows'
             ]
         }
     });
@@ -2772,31 +2755,13 @@ async function initWhatsApp(schoolHash, schoolConfig) {
         }
     });
 
-    client.on('ready', async () => {
+    client.on('ready', () => {
         console.log(`[${schoolConfig.nome_fantasia || schoolHash}] WhatsApp Client conectado e pronto!`);
         whatsappStatuses[schoolHash] = 'CONNECTED';
         whatsappQrData[schoolHash] = null;
         isInitializingWhatsApp[schoolHash] = false;
         whatsappManualInitRequested[schoolHash] = false; // Reset da flag de inicialização manual
         clientInitTime[schoolHash] = Date.now(); // Grava timestamp de conexão pronta
-
-        // Otimização de requisições de página para reduzir uso de memória e CPU
-        if (client.pupPage) {
-            try {
-                await client.pupPage.setRequestInterception(true);
-                client.pupPage.on('request', (req) => {
-                    const resourceType = req.resourceType();
-                    // Aborta requisições de mídia pesada (vídeos/áudios) e fontes extras desnecessárias
-                    if (['media', 'font'].includes(resourceType)) {
-                        req.abort();
-                    } else {
-                        req.continue();
-                    }
-                });
-            } catch (pErr) {
-                // Ignora se não for possível configurar interceptação
-            }
-        }
     });
 
     client.on('authenticated', () => {
