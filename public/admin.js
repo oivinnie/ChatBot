@@ -106,7 +106,7 @@ function logoutSchool() {
 // Habilita ou desabilita campos de configuração
 function disableConfigFields(disabled) {
     const fields = [
-        portalAlunoLink, atendimentoNumero, cadastroInteressadosLink, validadorCertificadoLink,
+        atendimentoNumero, cadastroInteressadosLink, validadorCertificadoLink,
         themeSelect, botEmoji, showFinanceiro,
         showHorarios, showBoletim, showPlataforma, showConteudo,
         showValidador, showInteressados, showTodasParcelas, widgetPosition, widgetText, testBtn, saveBtn,
@@ -115,6 +115,10 @@ function disableConfigFields(disabled) {
     fields.forEach(field => {
         if (field) field.disabled = disabled;
     });
+    if (portalAlunoLink) {
+        portalAlunoLink.readOnly = true;
+        portalAlunoLink.disabled = false;
+    }
 }
 
 // Função para formatar máscara de telefone
@@ -189,7 +193,10 @@ async function loadConfig() {
             }
         }
         
-        if (portalAlunoLink) portalAlunoLink.value = config.portal_aluno_link || '';
+        if (portalAlunoLink) {
+            portalAlunoLink.value = config.portal_aluno_link || '';
+            portalAlunoLink.readOnly = true;
+        }
         if (atendimentoNumero) atendimentoNumero.value = formatPhone(config.atendimento_numero || '');
         if (cadastroInteressadosLink) cadastroInteressadosLink.value = config.cadastro_interessados_link || '';
         if (validadorCertificadoLink) validadorCertificadoLink.value = config.validador_certificado_link || 'https://suportedksoft.com.br/certificado/';
