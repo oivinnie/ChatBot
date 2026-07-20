@@ -365,6 +365,64 @@
         </div>
     </div>
 
+    <!-- MODAL DE OPÇÕES DA FRANQUIA -->
+    <div id="franchiseOptionsModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 1000000; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s ease;">
+        <div class="modal-content" style="background: #ffffff; padding: 28px; border-radius: 20px; max-width: 520px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); transform: scale(0.9); transition: transform 0.2s ease; border: 1px solid rgba(0,0,0,0.05); text-align: left;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h3 id="franchiseOptionsModalTitle" style="font-size: 18px; font-weight: 700; color: #1e1b4b; margin: 0;">⚙️ Opções do Chatbot</h3>
+                <button type="button" onclick="closeFranchiseOptionsModal()" style="background: none; border: none; font-size: 22px; cursor: pointer; color: #64748b;">&times;</button>
+            </div>
+            <p style="font-size: 13px; color: var(--text-secondary); margin: 0 0 16px 0; line-height: 1.4;">
+                Defina os recursos ativos. As alterações serão aplicadas em lote para <strong>todas as escolas vinculadas</strong> a esta franquia.
+            </p>
+
+            <form id="franchiseOptionsForm" onsubmit="saveFranchiseOptions(event)">
+                <input type="hidden" id="franchiseOptionsId">
+
+                <div style="margin-bottom: 16px;">
+                    <label style="font-size: 13px; font-weight: 600; color: var(--text-primary); display: block; margin-bottom: 8px;">Opções Exibidas no Chatbot (Marque pelo menos 1)</label>
+                    <div style="display: flex; flex-direction: column; gap: 10px; background: rgba(0,0,0,0.02); padding: 14px; border-radius: 12px; border: 1px solid var(--border-color);">
+                        <label style="display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer;">
+                            <input type="checkbox" id="foShowFinanceiro" style="width: 18px; height: 18px; accent-color: #4f46e5;"> Financeiro
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer;">
+                            <input type="checkbox" id="foShowHorarios" style="width: 18px; height: 18px; accent-color: #4f46e5;"> Horários
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer;">
+                            <input type="checkbox" id="foShowBoletim" style="width: 18px; height: 18px; accent-color: #4f46e5;"> Boletim
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer;">
+                            <input type="checkbox" id="foShowPlataforma" style="width: 18px; height: 18px; accent-color: #4f46e5;"> Acesso da Plataforma
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer;">
+                            <input type="checkbox" id="foShowConteudo" style="width: 18px; height: 18px; accent-color: #4f46e5;"> Conteúdo Online
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer;">
+                            <input type="checkbox" id="foShowValidador" style="width: 18px; height: 18px; accent-color: #4f46e5;"> Validador de Certificado
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer;">
+                            <input type="checkbox" id="foShowInteressados" style="width: 18px; height: 18px; accent-color: #4f46e5;"> Cadastro de Interessados (Ainda não sou aluno)
+                        </label>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                    <label style="font-size: 13px; font-weight: 600; color: var(--text-primary); display: block; margin-bottom: 8px;">Configuração do Financeiro</label>
+                    <div style="display: flex; flex-direction: column; gap: 10px; background: rgba(0,0,0,0.02); padding: 14px; border-radius: 12px; border: 1px solid var(--border-color);">
+                        <label style="display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer;">
+                            <input type="checkbox" id="foShowTodasParcelas" style="width: 18px; height: 18px; accent-color: #4f46e5;"> Exibir todas as parcelas em aberto (se desmarcado, exibe apenas a próxima de cada conta)
+                        </label>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                    <button type="button" class="btn-action" style="background: rgba(0,0,0,0.05); color: var(--text-primary); border-color: var(--border-color);" onclick="closeFranchiseOptionsModal()">Cancelar</button>
+                    <button type="submit" class="admin-btn btn-save" style="width: auto; padding: 10px 20px; font-size: 14px;">💾 Salvar para Todas as Escolas</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- TOAST NOTIFICATION -->
     <div id="toastNotification" class="toast">Feedback</div>
 
@@ -488,6 +546,7 @@
                         <span style="border-bottom: 1px dotted var(--text-secondary); font-weight: 600;">${f.total_escolas}</span>
                     </td>
                     <td style="text-align: center;">
+                        <button class="btn-action" style="background: #4f46e5; border-color: #4f46e5; color: #ffffff; padding: 6px 12px; font-size: 13px;" onclick="openFranchiseOptionsModal(${f.id}, '${escapeQuote(f.nome)}')">⚙️ Opções</button>
                         <button class="btn-action btn-edit" onclick="editFranchise(${f.id}, '${escapeQuote(f.nome)}', ${f.dia_vencimento || 'null'})">Editar</button>
                         <button class="btn-action btn-delete" onclick="deleteFranchise(${f.id})">Excluir</button>
                     </td>
@@ -681,6 +740,89 @@
                     loadFranchises(); // Recarrega as franquias para atualizar a contagem e tooltips
                 } else {
                     showToast('Erro ao atualizar associação.', true);
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('Erro de conexão.', true);
+            }
+        }
+
+        async function openFranchiseOptionsModal(id, name) {
+            document.getElementById('franchiseOptionsId').value = id;
+            document.getElementById('franchiseOptionsModalTitle').textContent = `⚙️ Opções do Chatbot - ${name}`;
+
+            try {
+                const response = await fetch(`/api/admin/franquias/${id}/options`, {
+                    headers: { 'x-admin-token': adminToken }
+                });
+                const data = await response.json();
+                
+                document.getElementById('foShowFinanceiro').checked = data.show_financeiro !== false;
+                document.getElementById('foShowHorarios').checked = data.show_horarios !== false;
+                document.getElementById('foShowBoletim').checked = data.show_boletim !== false;
+                document.getElementById('foShowPlataforma').checked = data.show_plataforma !== false;
+                document.getElementById('foShowConteudo').checked = data.show_conteudo !== false;
+                document.getElementById('foShowValidador').checked = data.show_validador !== false;
+                document.getElementById('foShowInteressados').checked = data.show_interessados !== false;
+                document.getElementById('foShowTodasParcelas').checked = data.show_todas_parcelas !== false;
+
+                const modal = document.getElementById('franchiseOptionsModal');
+                modal.style.display = 'flex';
+                setTimeout(() => {
+                    modal.style.opacity = '1';
+                    modal.querySelector('.modal-content').style.transform = 'scale(1)';
+                }, 10);
+            } catch (err) {
+                console.error(err);
+                showToast('Erro ao carregar opções da franquia.', true);
+            }
+        }
+
+        function closeFranchiseOptionsModal() {
+            const modal = document.getElementById('franchiseOptionsModal');
+            modal.style.opacity = '0';
+            modal.querySelector('.modal-content').style.transform = 'scale(0.9)';
+            setTimeout(() => {
+                modal.style.display = 'none';
+            }, 200);
+        }
+
+        async function saveFranchiseOptions(e) {
+            e.preventDefault();
+            const id = document.getElementById('franchiseOptionsId').value;
+
+            const payload = {
+                show_financeiro: document.getElementById('foShowFinanceiro').checked,
+                show_horarios: document.getElementById('foShowHorarios').checked,
+                show_boletim: document.getElementById('foShowBoletim').checked,
+                show_plataforma: document.getElementById('foShowPlataforma').checked,
+                show_conteudo: document.getElementById('foShowConteudo').checked,
+                show_validador: document.getElementById('foShowValidador').checked,
+                show_interessados: document.getElementById('foShowInteressados').checked,
+                show_todas_parcelas: document.getElementById('foShowTodasParcelas').checked
+            };
+
+            if (!payload.show_financeiro && !payload.show_horarios && !payload.show_boletim && !payload.show_plataforma && !payload.show_conteudo && !payload.show_validador && !payload.show_interessados) {
+                showToast('Selecione pelo menos uma opção para o chatbot.', true);
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/franquias/${id}/options`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-admin-token': adminToken
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    showToast(`Opções salvas com sucesso para todas as ${data.count || 0} escolas da franquia!`);
+                    closeFranchiseOptionsModal();
+                } else {
+                    showToast(data.message || 'Erro ao salvar opções da franquia.', true);
                 }
             } catch (err) {
                 console.error(err);

@@ -2147,6 +2147,96 @@ app.post('/api/admin/franquias', requireAdminAuth, async (req, res) => {
     }
 });
 
+// Obter opções das escolas da franquia
+app.get('/api/admin/franquias/:id/options', requireAdminAuth, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const pool = ConfigService.getCentralPool();
+        const [rows] = await pool.execute(`
+            SELECT show_financeiro, show_horarios, show_boletim, show_plataforma, 
+                   show_conteudo, show_validador, show_interessados, show_todas_parcelas
+            FROM escola_configs
+            WHERE franquia_id = ?
+            LIMIT 1
+        `, [id]);
+
+        if (rows.length > 0) {
+            const r = rows[0];
+            return res.json({
+                show_financeiro: r.show_financeiro !== 0 && r.show_financeiro !== false,
+                show_horarios: r.show_horarios !== 0 && r.show_horarios !== false,
+                show_boletim: r.show_boletim !== 0 && r.show_boletim !== false,
+                show_plataforma: r.show_plataforma !== 0 && r.show_plataforma !== false,
+                show_conteudo: r.show_conteudo !== 0 && r.show_conteudo !== false,
+                show_validador: r.show_validador !== 0 && r.show_validador !== false,
+                show_interessados: r.show_interessados !== 0 && r.show_interessados !== false,
+                show_todas_parcelas: r.show_todas_parcelas !== 0 && r.show_todas_parcelas !== false
+            });
+        }
+
+        res.json({
+            show_financeiro: true,
+            show_horarios: true,
+            show_boletim: true,
+            show_plataforma: true,
+            show_conteudo: true,
+            show_validador: true,
+            show_interessados: true,
+            show_todas_parcelas: true
+        });
+    } catch (err) {
+        console.error('Erro ao buscar opções da franquia:', err);
+        res.status(500).json({ error: 'ERRO_INTERNO', message: err.message });
+    }
+});
+
+// Atualizar opções em lote para todas as escolas da franquia
+app.put('/api/admin/franquias/:id/options', requireAdminAuth, async (req, res) => {
+    const { id } = req.params;
+    const { 
+        show_financeiro, show_horarios, show_boletim, show_plataforma, 
+        show_conteudo, show_validador, show_interessados, show_todas_parcelas 
+    } = req.body;
+
+    try {
+        const pool = ConfigService.getCentralPool();
+        await pool.execute(`
+            UPDATE escola_configs
+            SET show_financeiro = ?,
+                show_horarios = ?,
+                show_boletim = ?,
+                show_plataforma = ?,
+                show_conteudo = ?,
+                show_validador = ?,
+                show_interessados = ?,
+                show_todas_parcelas = ?
+            WHERE franquia_id = ?
+        `, [
+            show_financeiro !== false,
+            show_horarios !== false,
+            show_boletim !== false,
+            show_plataforma !== false,
+            show_conteudo !== false,
+            show_validador !== false,
+            show_interessados !== false,
+            show_todas_parcelas !== false,
+            id
+        ]);
+
+        // Invalida o cache de todas as escolas dessa franquia
+        const [schools] = await pool.execute('SELECT id_atendimento, hash FROM escola_configs WHERE franquia_id = ?', [id]);
+        for (const s of schools) {
+            ConfigService.invalidateCache(s.id_atendimento);
+            if (s.hash) ConfigService.invalidateCache(s.hash);
+        }
+
+        res.json({ success: true, count: schools.length });
+    } catch (err) {
+        console.error('Erro ao atualizar opções da franquia:', err);
+        res.status(500).json({ error: 'ERRO_INTERNO', message: err.message });
+    }
+});
+
 // Editar franquia
 app.put('/api/admin/franquias/:id', requireAdminAuth, async (req, res) => {
     const { id } = req.params;
