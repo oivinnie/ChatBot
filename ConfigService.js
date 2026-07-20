@@ -9,6 +9,18 @@ const mysql = require('mysql2/promise');
 const crypto = require('crypto');
 const { encrypt, decrypt, encryptId_portal_aluno, decryptId_portal_aluno } = require('./Components/crypto');
 
+// Pools de conexão com as bases MySQL
+let centralPool = null;
+let dksoftPool = null;
+
+// Caches em memória
+const configCache = new Map(); // chave (id ou hash) -> { data, timestamp }
+const connCache = new Map(); // id_atendimento -> { data, timestamp }
+
+// TTLs em milissegundos
+const CONFIG_CACHE_TTL = 1000 * 60 * 60; // 1 hora
+const CONN_CACHE_TTL = 1000 * 60 * 5;    // 5 minutos
+
 // Inicializa pools de conexão
 function getCentralPool() {
     if (!centralPool) {
