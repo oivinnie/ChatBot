@@ -480,7 +480,7 @@ if (copyWidgetCodeBtn) {
     copyWidgetCodeBtn.addEventListener('click', () => {
         const embedBox = document.querySelector('.code-box-embed');
         if (embedBox) {
-            navigator.clipboard.writeText(embedBox.textContent.trim()).then(() => {
+            copyTextToClipboard(embedBox.textContent.trim()).then(() => {
                 const originalHtml = copyWidgetCodeBtn.innerHTML;
                 copyWidgetCodeBtn.innerHTML = '<span>✅ Copiado!</span>';
                 copyWidgetCodeBtn.classList.add('btn-success-feedback');
@@ -746,12 +746,59 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// Função utilitária universal para copiar texto (funciona em HTTPS e HTTP sem SSL)
+function copyTextToClipboard(textToCopy) {
+    if (!textToCopy) return Promise.reject(new Error('Nenhum texto para copiar'));
+    
+    if (navigator.clipboard && window.isSecureContext && typeof navigator.clipboard.writeText === 'function') {
+        return navigator.clipboard.writeText(textToCopy).catch(() => {
+            return fallbackCopyText(textToCopy);
+        });
+    } else {
+        return fallbackCopyText(textToCopy);
+    }
+}
+
+function fallbackCopyText(textToCopy) {
+    return new Promise((resolve, reject) => {
+        try {
+            const textArea = document.createElement('textarea');
+            textArea.value = textToCopy;
+            textArea.style.position = 'fixed';
+            textArea.style.top = '0';
+            textArea.style.left = '0';
+            textArea.style.width = '2em';
+            textArea.style.height = '2em';
+            textArea.style.padding = '0';
+            textArea.style.border = 'none';
+            textArea.style.outline = 'none';
+            textArea.style.boxShadow = 'none';
+            textArea.style.background = 'transparent';
+            textArea.style.opacity = '0';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            
+            const successful = document.execCommand('copy');
+            document.body.removeChild(textArea);
+            
+            if (successful) {
+                resolve();
+            } else {
+                reject(new Error('execCommand copy falhou'));
+            }
+        } catch (err) {
+            reject(err);
+        }
+    });
+}
+
 // Função utilitária para copiar valor do input para a área de transferência
 function copyInputText(inputId, btnElement) {
     const input = document.getElementById(inputId);
     if (!input || !input.value) return;
     
-    navigator.clipboard.writeText(input.value.trim()).then(() => {
+    copyTextToClipboard(input.value.trim()).then(() => {
         const originalText = btnElement.innerHTML;
         btnElement.innerHTML = '✅ Copiado!';
         btnElement.style.background = '#10b981';
@@ -766,6 +813,7 @@ function copyInputText(inputId, btnElement) {
         }, 1800);
     }).catch(err => {
         console.error('Erro ao copiar link:', err);
+        showAlert('error', 'Falha ao copiar o link.');
     });
 }
 

@@ -124,11 +124,41 @@
             codeBox.textContent = `<script src="${hostUrl}/widget.js${hash ? '?i=' + hash : ''}"><\/script>`;
         }
 
+        function copyTextToClipboard(textToCopy) {
+            if (!textToCopy) return Promise.reject(new Error('Nenhum texto para copiar'));
+            if (navigator.clipboard && window.isSecureContext && typeof navigator.clipboard.writeText === 'function') {
+                return navigator.clipboard.writeText(textToCopy).catch(() => fallbackCopyText(textToCopy));
+            } else {
+                return fallbackCopyText(textToCopy);
+            }
+        }
+        function fallbackCopyText(textToCopy) {
+            return new Promise((resolve, reject) => {
+                try {
+                    const textArea = document.createElement('textarea');
+                    textArea.value = textToCopy;
+                    textArea.style.position = 'fixed';
+                    textArea.style.top = '0';
+                    textArea.style.left = '0';
+                    textArea.style.opacity = '0';
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    const successful = document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    if (successful) resolve();
+                    else reject(new Error('execCommand copy falhou'));
+                } catch (err) {
+                    reject(err);
+                }
+            });
+        }
+
         // Lógica para copiar o código
         const copyBtn = document.getElementById('copyWidgetCodeBtn');
         if (copyBtn && codeBox) {
             copyBtn.addEventListener('click', () => {
-                navigator.clipboard.writeText(codeBox.textContent.trim()).then(() => {
+                copyTextToClipboard(codeBox.textContent.trim()).then(() => {
                     const originalHtml = copyBtn.innerHTML;
                     copyBtn.innerHTML = '<span>✅ Copiado!</span>';
                     copyBtn.classList.add('btn-success-feedback');
