@@ -217,9 +217,8 @@ async function getSchoolConfig(idOrHash) {
         const defaultCrm = `https://appdksoft.com.br/leads/?i=${encId}`;
         const defaultValidador = `https://suportedksoft.com.br/certificado/`;
 
-        if (!config.portal_aluno_link || !config.portal_aluno_link.trim()) {
-            config.portal_aluno_link = defaultPortal;
-        }
+        config.portal_aluno_link = defaultPortal;
+
         if (!config.cadastro_interessados_link || !config.cadastro_interessados_link.trim()) {
             config.cadastro_interessados_link = defaultCrm;
         }
