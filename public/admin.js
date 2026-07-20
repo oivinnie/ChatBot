@@ -59,7 +59,9 @@ const dkappInactiveWarning = document.getElementById('dkappInactiveWarning');
 // DOM Elements - Config Section
 const configSection = document.getElementById('configSection');
 const botEmoji = document.getElementById('botEmoji');
+const portalAlunoLink = document.getElementById('portalAlunoLink');
 const atendimentoNumero = document.getElementById('atendimentoNumero');
+const cadastroInteressadosLink = document.getElementById('cadastroInteressadosLink');
 const validadorCertificadoLink = document.getElementById('validadorCertificadoLink');
 const themeSelect = document.getElementById('themeSelect');
 
@@ -104,7 +106,8 @@ function logoutSchool() {
 // Habilita ou desabilita campos de configuração
 function disableConfigFields(disabled) {
     const fields = [
-        atendimentoNumero, themeSelect, botEmoji, showFinanceiro,
+        portalAlunoLink, atendimentoNumero, cadastroInteressadosLink, validadorCertificadoLink,
+        themeSelect, botEmoji, showFinanceiro,
         showHorarios, showBoletim, showPlataforma, showConteudo,
         showValidador, showInteressados, showTodasParcelas, widgetPosition, widgetText, testBtn, saveBtn,
         document.getElementById('waRefreshBtn'), document.getElementById('waDisconnectBtn')
@@ -186,7 +189,9 @@ async function loadConfig() {
             }
         }
         
+        if (portalAlunoLink) portalAlunoLink.value = config.portal_aluno_link || '';
         if (atendimentoNumero) atendimentoNumero.value = formatPhone(config.atendimento_numero || '');
+        if (cadastroInteressadosLink) cadastroInteressadosLink.value = config.cadastro_interessados_link || '';
         if (validadorCertificadoLink) validadorCertificadoLink.value = config.validador_certificado_link || 'https://suportedksoft.com.br/certificado/';
         if (themeSelect) themeSelect.value = config.theme || 'indigo';
         if (botEmoji) botEmoji.value = config.emoji || '🤖';
@@ -354,7 +359,7 @@ async function validateSchool() {
                 message: `Escola Encontrada!<br>ID: ${data.id_atendimento}<br>Nome Fantasia: ${data.nome_fantasia}`,
                 icon: '🎉',
                 onConfirm: () => {
-                    window.location.search = '?hash=' + data.hash;
+                    window.location.search = '?i=' + data.hash;
                 }
             });
         } else if (data.error === 'PAYMENT_BLOCKED' || status === 403 && data.error === 'PAYMENT_BLOCKED') {
@@ -415,8 +420,10 @@ async function saveConfig() {
     
     const configData = {
         hash: hash,
+        portal_aluno_link: portalAlunoLink ? portalAlunoLink.value : '',
         atendimento_numero: atendimentoNumero ? atendimentoNumero.value.replace(/\D/g, '') : '',
-        validador_certificado_link: 'https://suportedksoft.com.br/certificado/',
+        cadastro_interessados_link: cadastroInteressadosLink ? cadastroInteressadosLink.value : '',
+        validador_certificado_link: validadorCertificadoLink ? validadorCertificadoLink.value : '',
         theme: themeSelect ? themeSelect.value : 'indigo',
         emoji: botEmoji ? botEmoji.value : '🤖',
         show_financeiro: showFinanceiro ? showFinanceiro.checked : true,

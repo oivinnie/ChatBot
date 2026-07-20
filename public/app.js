@@ -309,7 +309,7 @@ async function initChat() {
     
     let infoData = null;
     try {
-        const infoRes = await fetch(`/api/info?hash=${hash}`);
+        const infoRes = await fetch(`/api/info?i=${hash}`);
         infoData = await infoRes.json();
         localStorage.setItem(cacheKey, JSON.stringify(infoData));
         applyBotInfo(infoData);

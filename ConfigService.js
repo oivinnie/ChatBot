@@ -213,8 +213,19 @@ async function getSchoolConfig(idOrHash) {
 
     if (config && config.id_atendimento) {
         const encId = encryptId_portal_aluno(config.id_atendimento);
-        config.portal_aluno_link = `https://suportedksoft.com.br/portal_aluno/index?i=${encId}`;
-        config.cadastro_interessados_link = `https://appdksoft.com.br/leads/?i=${encId}`;
+        const defaultPortal = `https://suportedksoft.com.br/portal_aluno/index?i=${encId}`;
+        const defaultCrm = `https://appdksoft.com.br/leads/?i=${encId}`;
+        const defaultValidador = `https://suportedksoft.com.br/certificado/`;
+
+        if (!config.portal_aluno_link || !config.portal_aluno_link.trim()) {
+            config.portal_aluno_link = defaultPortal;
+        }
+        if (!config.cadastro_interessados_link || !config.cadastro_interessados_link.trim()) {
+            config.cadastro_interessados_link = defaultCrm;
+        }
+        if (!config.validador_certificado_link || !config.validador_certificado_link.trim()) {
+            config.validador_certificado_link = defaultValidador;
+        }
     }
 
     // Salva no cache sob ambas as chaves (ID e Hash)
@@ -402,9 +413,9 @@ async function saveSchoolConfig(configData) {
 
     await pool.execute(insertQuery, [
         id_atendimento, hash, cnpj, nome_fantasia,
-        portal_aluno_link || 'https://portal.dksoft.com.br/',
-        cadastro_interessados_link || '',
-        validador_certificado_link || 'https://suportedksoft.com.br/certificado/',
+        portal_aluno_link ? portal_aluno_link.trim() : '',
+        cadastro_interessados_link ? cadastro_interessados_link.trim() : '',
+        validador_certificado_link ? validador_certificado_link.trim() : '',
         theme || 'indigo',
         emoji || '🤖',
         show_financeiro !== false,
