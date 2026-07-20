@@ -746,6 +746,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// Função utilitária para copiar valor do input para a área de transferência
+function copyInputText(inputId, btnElement) {
+    const input = document.getElementById(inputId);
+    if (!input || !input.value) return;
+    
+    navigator.clipboard.writeText(input.value.trim()).then(() => {
+        const originalText = btnElement.innerHTML;
+        btnElement.innerHTML = '✅ Copiado!';
+        btnElement.style.background = '#10b981';
+        btnElement.style.color = '#ffffff';
+        btnElement.style.borderColor = '#10b981';
+        
+        setTimeout(() => {
+            btnElement.innerHTML = originalText;
+            btnElement.style.background = '';
+            btnElement.style.color = '';
+            btnElement.style.borderColor = '';
+        }, 1800);
+    }).catch(err => {
+        console.error('Erro ao copiar link:', err);
+    });
+}
+
 // Inicializa na abertura da pagina
 window.onload = () => {
     setupPageFlow();
