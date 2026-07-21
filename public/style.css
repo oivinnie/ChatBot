@@ -644,6 +644,17 @@ body.iframe-mode .container {
     gap: 8px;
 }
 
+#portalAlunoLink {
+  color: #6c757d;          /* cinza neutro para o texto */
+  background-color: #f1f3f5; /* cinza bem claro no fundo */
+  font-style: italic;      /* opcional, para diferenciar */
+}
+
+#portalAlunoLink::placeholder {
+  color: #adb5bd;          /* cinza mais claro para o placeholder */
+}
+
+
 @media (max-width: 1024px) {
     #configSection.admin-card {
         height: auto !important;
