@@ -2661,7 +2661,7 @@ app.get('/api/info', async (req, res) => {
             id_atendimento = school.id_atendimento ? String(school.id_atendimento).trim() : '';
             nome_fantasia = school.nome_fantasia ? String(school.nome_fantasia).trim() : '';
             if (school.nome_franquia && school.nome_franquia.trim() !== '') {
-                title = `Assistente (${school.nome_franquia.trim()})`;
+                title = `Assistente ${school.nome_franquia.trim()}`;
             } else {
                 title = `Assistente ${nome_fantasia}`;
             }
