@@ -653,7 +653,7 @@ async function getFranchiseSchools(currentHash) {
     const pool = getCentralPool();
     // Busca todas as escolas ativas da mesma franquia
     const [rows] = await pool.execute(
-        `SELECT ec.hash, ec.nome_fantasia, ec.vencimento 
+        `SELECT ec.hash, ec.nome_fantasia, ec.vencimento, ec.cadastro_interessados_link, ec.atendimento_numero 
          FROM escola_configs ec
          WHERE ec.franquia_id = ? AND ec.status = 'ativo'`,
         [mainConfig.franquia_id]

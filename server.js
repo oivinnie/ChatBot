@@ -1335,6 +1335,135 @@ async function chatHandler(req, res) {
         session.student = null;
     }
 
+    // Tratamento para seleção de escola da franquia para cadastro de interessados
+    if (session.step === 'CADASTRO_SCHOOL_SELECTION') {
+        const schools = session.franchiseSchools || [];
+        const indexSair = String(schools.length + 1);
+
+        // 1. Mapeamento por índice numérico
+        const choice = parseInt(text);
+        let selectedSchool = null;
+        if (!isNaN(choice) && choice >= 1 && choice <= schools.length) {
+            selectedSchool = schools[choice - 1];
+        }
+
+        // 2. Mapeamento por palavra-chave textuais ou do label
+        if (!selectedSchool) {
+            const cleanTextLower = cleanText.trim();
+            selectedSchool = schools.find(s => {
+                const nameLower = s.nome_fantasia.toLowerCase();
+                return cleanTextLower.includes(nameLower) || nameLower.includes(cleanTextLower);
+            });
+        }
+
+        if (selectedSchool) {
+            const schoolHash = selectedSchool.hash;
+            const schoolConfig = await ConfigService.getSchoolConfig(schoolHash);
+
+            session.step = 'WELCOME';
+            session.student = null;
+            delete session.franchiseSchools;
+            delete session.availableOptions;
+
+            const greeting = await getGreetingMessage(session.hash);
+
+            const redirectUrl = schoolConfig.cadastro_interessados_link && schoolConfig.cadastro_interessados_link.toString().trim() !== ''
+                ? formatUrl(schoolConfig.cadastro_interessados_link.toString())
+                : null;
+
+            if (redirectUrl) {
+                return res.json({
+                    response: `Clique no link a seguir para se cadastrar na unidade **${selectedSchool.nome_fantasia}**:\n[Quero conhecer os cursos](${redirectUrl})\n\nEm breve um atendente retornará o contato 😉`,
+                    options: greeting.options,
+                    isIdentified: false,
+                    redirectUrl: null
+                });
+            } else {
+                const atendNumber = schoolConfig.atendimento_numero ? schoolConfig.atendimento_numero.toString().trim() : '';
+                if (atendNumber) {
+                    const number = atendNumber.replace(/\D/g, '');
+                    return res.json({
+                        response: `Para conhecer os cursos na unidade **${selectedSchool.nome_fantasia}**, entre em contato via WhatsApp:\n[Abrir WhatsApp](https://wa.me/${number})`,
+                        options: greeting.options,
+                        isIdentified: false,
+                        redirectUrl: null
+                    });
+                } else {
+                    return res.json({
+                        response: `Por favor, entre em contato direto com a unidade **${selectedSchool.nome_fantasia}** para mais informações sobre os cursos.`,
+                        options: greeting.options,
+                        isIdentified: false,
+                        redirectUrl: null
+                    });
+                }
+            }
+        }
+
+        // Se escolheu Sair
+        if (cleanText === indexSair || cleanText === 'sair' || cleanText === 'limpar' || cleanText === 'novo') {
+            session.step = 'WELCOME';
+            session.student = null;
+            session.justLoggedOut = true;
+            delete session.franchiseSchools;
+            delete session.availableOptions;
+
+            let schoolEmoji = '🤖';
+            try {
+                const config = await ConfigService.getSchoolConfig(session.hash);
+                if (config && config.emoji) {
+                    schoolEmoji = config.emoji;
+                }
+            } catch (errEmoji) {}
+
+            const goodbyeText = `👋 Até logo, se precisar de algo é só me mandar mensagem! ${schoolEmoji}`;
+            const greeting = await getGreetingMessage(session.hash, null, null);
+            return res.json({
+                response: goodbyeText,
+                options: greeting.options,
+                isIdentified: false
+            });
+        }
+
+        if (cleanText === 'menu') {
+            session.step = 'WELCOME';
+            session.student = null;
+            delete session.franchiseSchools;
+            delete session.availableOptions;
+            const greeting = await getGreetingMessage(session.hash, null, null);
+            return res.json({
+                response: greeting.responseText,
+                options: greeting.options,
+                isIdentified: false
+            });
+        }
+
+        // Se digitou qualquer outra coisa inválida, repete a pergunta
+        let responseText = "Opção inválida. Selecione a escola que deseja conhecer os cursos:\n\n";
+        schools.forEach((s, idx) => {
+            responseText += `${idx + 1} - **${s.nome_fantasia}**\n`;
+        });
+
+        const schoolOptions = schools.map((s, idx) => ({
+            id: `cadastro_school_${s.hash}`,
+            label: s.nome_fantasia,
+            url: null
+        }));
+        schoolOptions.push({
+            id: 'sair',
+            label: 'Sair',
+            url: null
+        });
+        responseText += `\n${schools.length + 1} - **Sair**`;
+        responseText += "\n\nDigite a opção desejada👇";
+
+        return res.json({
+            response: responseText,
+            options: schoolOptions,
+            isIdentified: false,
+            redirectUrl: null
+        });
+    }
+
     // Real-time status check
     if (session.student) {
         const targetHash = session.targetSchoolHash || session.hash;
@@ -1494,6 +1623,43 @@ async function chatHandler(req, res) {
             } else if (selectedOption.id === 'cadastro') {
                 const config = (await ConfigService.getSchoolConfig(session.hash)) || {};
                 const greeting = await getGreetingMessage(session.hash, session.student ? session.student.id : null, session.student ? session.student.nome : null);
+
+                if (config.franquia_id) {
+                    const schools = await ConfigService.getFranchiseSchools(session.hash);
+                    if (schools && schools.length > 1) {
+                        session.step = 'CADASTRO_SCHOOL_SELECTION';
+                        session.franchiseSchools = schools;
+
+                        let responseText = "Selecione a escola que deseja conhecer os cursos:\n\n";
+                        schools.forEach((s, idx) => {
+                            responseText += `${idx + 1} - **${s.nome_fantasia}**\n`;
+                        });
+
+                        const schoolOptions = schools.map((s, idx) => ({
+                            id: `cadastro_school_${s.hash}`,
+                            label: s.nome_fantasia,
+                            url: null
+                        }));
+
+                        schoolOptions.push({
+                            id: 'sair',
+                            label: 'Sair',
+                            url: null
+                        });
+                        responseText += `\n${schools.length + 1} - **Sair**`;
+                        responseText += "\n\nDigite a opção desejada👇";
+
+                        session.availableOptions = schoolOptions;
+
+                        return res.json({
+                            response: responseText,
+                            options: schoolOptions,
+                            isIdentified: false,
+                            redirectUrl: null
+                        });
+                    }
+                }
+
                 const redirectUrl = config.cadastro_interessados_link && config.cadastro_interessados_link.toString().trim() !== ''
                     ? formatUrl(config.cadastro_interessados_link.toString())
                     : null;
@@ -2494,7 +2660,11 @@ app.get('/api/info', async (req, res) => {
             theme = school.theme || 'indigo';
             id_atendimento = school.id_atendimento ? String(school.id_atendimento).trim() : '';
             nome_fantasia = school.nome_fantasia ? String(school.nome_fantasia).trim() : '';
-            title = `Assistente ${nome_fantasia}`;
+            if (school.nome_franquia && school.nome_franquia.trim() !== '') {
+                title = `Assistente (${school.nome_franquia.trim()})`;
+            } else {
+                title = `Assistente ${nome_fantasia}`;
+            }
         }
 
         if (hash && school) {
@@ -2503,6 +2673,10 @@ app.get('/api/info', async (req, res) => {
                 if (result && result.length > 0) {
                     if (result[0].NOME_FANTASIA) {
                         nome_fantasia = result[0].NOME_FANTASIA.toString().trim();
+                    }
+                    if (school.nome_franquia && school.nome_franquia.trim() !== '') {
+                        title = `Assistente (${school.nome_franquia.trim()})`;
+                    } else {
                         title = `Assistente ${nome_fantasia}`;
                     }
                     if (result[0].ID_ATENDIMENTO !== null && result[0].ID_ATENDIMENTO !== undefined) {

@@ -116,8 +116,9 @@ function appendMessage(sender, text, options = null, isIdentified = false, extra
         }
 
         // Determina se deve mostrar o botão Sair
+        const hasExitOption = options && options.some(opt => opt.id === 'sair');
         const isInitialGreeting = (!isIdentified && options && options.length > 0 && chatLog.children.length <= 1);
-        if (!isInitialGreeting) {
+        if (!isInitialGreeting && !hasExitOption) {
             const exitBtn = document.createElement('button');
             exitBtn.classList.add('option-btn');
             exitBtn.style.border = '1px dashed rgba(220, 38, 38, 0.3)';
