@@ -2675,7 +2675,7 @@ app.get('/api/info', async (req, res) => {
                         nome_fantasia = result[0].NOME_FANTASIA.toString().trim();
                     }
                     if (school.nome_franquia && school.nome_franquia.trim() !== '') {
-                        title = `Assistente (${school.nome_franquia.trim()})`;
+                        title = `Assistente ${school.nome_franquia.trim()}`;
                     } else {
                         title = `Assistente ${nome_fantasia}`;
                     }
